@@ -1,0 +1,119 @@
+/* Member Registration Page */
+
+.member-register-page {
+  min-height: 85vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30px 15px;
+  background: #f5f7fb;
+}
+
+.member-register-card {
+  width: 100%;
+  max-width: 550px;
+  background: #ffffff;
+  padding: 35px;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+.member-register-title {
+  text-align: center;
+  margin-bottom: 8px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.member-register-subtitle {
+  text-align: center;
+  color: #6b7280;
+  margin-bottom: 28px;
+  font-size: 14px;
+}
+
+.member-form-group {
+  margin-bottom: 18px;
+}
+
+.member-form-group label {
+  display: block;
+  margin-bottom: 7px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.member-form-group input,
+.member-form-group textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  transition: 0.2s;
+  box-sizing: border-box;
+}
+
+.member-form-group textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.member-form-group input:focus,
+.member-form-group textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.member-register-button {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.member-register-button:hover {
+  background: #1d4ed8;
+}
+
+.member-register-button:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
+.member-success {
+  padding: 14px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  color: #166534;
+}
+
+.member-error {
+  padding: 14px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+}
+
+@media (max-width: 600px) {
+  .member-register-card {
+    padding: 25px 20px;
+  }
+
+  .member-register-title {
+    font-size: 24px;
+  }
+}
