@@ -45,9 +45,10 @@ const registerNHG = async (req, res) => {
       password,
     } = req.body;
 
-    const finalName = (nhgName || name || "").trim();
-    const finalEmail = (secretaryEmail || "").toLowerCase().trim();
-    const finalPhone = (secretaryMobileNumber || secretaryPhone || "").trim();
+    const finalName = String(nhgName || name || "").trim();
+    const finalEmail = String(secretaryEmail || "").toLowerCase().trim();
+    const finalPhone = String(secretaryMobileNumber || secretaryPhone || "").trim();
+    const passwordValue = String(password || "");
     const finalWard = (wardNumber || ward || "15").trim();
 
     if (!finalName) {
@@ -56,6 +57,14 @@ const registerNHG = async (req, res) => {
     if (!secretaryName || !secretaryName.trim() || !finalEmail) {
       return res.status(400).json({ message: "Secretary Name and Email are required" });
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(finalEmail)) return res.status(400).json({ message: "Enter a valid Secretary email address." });
+    if (secretaryName.trim().length < 2 || secretaryName.trim().length > 80) return res.status(400).json({ message: "Secretary name must be between 2 and 80 characters." });
+    if (passwordValue.length < 8) return res.status(400).json({ message: "Create a password with at least 8 characters." });
+    if (!/^\d{1,3}$/.test(String(finalWard))) return res.status(400).json({ message: "Enter a valid ward number." });
+    const phoneDigits = finalPhone.replace(/\D/g, "");
+    if (phoneDigits.length !== 10) return res.status(400).json({ message: "Secretary mobile number must contain 10 digits." });
+    const members = Number(numberOfMembers || memberCount || 0);
+    if (!Number.isInteger(members) || members < 1 || members > 100) return res.status(400).json({ message: "Member count must be between 1 and 100." });
 
     const existingName = await NHG.findOne({ name: { $regex: new RegExp(`^${finalName}$`, "i") } });
     if (existingName) {
@@ -82,7 +91,7 @@ const registerNHG = async (req, res) => {
       secretaryName: secretaryName.trim(),
       secretaryEmail: finalEmail,
       secretaryPhone: finalPhone,
-      memberCount: Number(numberOfMembers || memberCount || 0),
+      memberCount: members,
       status: "Pending", // NHG must be verified by Main Admin before login
       panchayath: localBodyName || cdsName || "Kudumbashree CDS",
       description: `Registered Kudumbashree NHG under Ward ${finalWard}, ${cdsName || "CDS"}.`,
@@ -92,11 +101,11 @@ const registerNHG = async (req, res) => {
     await User.create({
       name: secretaryName.trim(),
       email: finalEmail,
-      password: password || "password123",
+      password: passwordValue,
       role: "NHG_SECRETARY",
       nhgName: finalName,
       nhgId: nextNhgId,
-      phone: finalPhone,
+      phone: phoneDigits,
     });
 
     return res.status(201).json({

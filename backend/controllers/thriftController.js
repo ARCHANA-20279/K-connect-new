@@ -172,6 +172,41 @@ const getMemberPassbook = async (req, res) => {
   }
 };
 
+// Correct a previously recorded thrift entry (Secretary for their own NHG only).
+const updateThrift = async (req, res) => {
+  try {
+    const thrift = await Thrift.findById(req.params.id);
+    if (!thrift) return res.status(404).json({ message: "Thrift record not found" });
+
+    const user = req.user;
+    const belongsToNhg = (user.nhgId && thrift.nhgId === user.nhgId) ||
+      (user.nhgName && thrift.nhgName === user.nhgName);
+    if (!belongsToNhg) return res.status(403).json({ message: "You can only update thrift records for your NHG." });
+
+    const { amount, date, paymentMode, remarks } = req.body;
+    if (amount !== undefined) {
+      if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+        return res.status(400).json({ message: "Deposit amount must be greater than 0." });
+      }
+      thrift.amount = Number(amount);
+    }
+    if (date !== undefined) thrift.date = date;
+    if (paymentMode !== undefined) {
+      if (!["Cash", "UPI", "Bank"].includes(paymentMode)) {
+        return res.status(400).json({ message: "Choose Cash, UPI, or Bank as the payment mode." });
+      }
+      thrift.paymentMode = paymentMode;
+    }
+    if (remarks !== undefined) thrift.remarks = remarks;
+
+    await thrift.save();
+    return res.status(200).json({ message: "Thrift record updated", thrift });
+  } catch (error) {
+    console.error("Update thrift error:", error);
+    return res.status(500).json({ message: "Failed to update thrift record", error: error.message });
+  }
+};
+
 // 4. Delete thrift entry
 const deleteThrift = async (req, res) => {
   try {
@@ -192,5 +227,6 @@ module.exports = {
   recordThrift,
   getAllThrift,
   getMemberPassbook,
+  updateThrift,
   deleteThrift,
 };

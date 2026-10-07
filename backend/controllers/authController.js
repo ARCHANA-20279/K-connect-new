@@ -27,11 +27,19 @@ const generateToken = (id) => {
 // @route POST /api/auth/register
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, role, nhgName, phone } = req.body;
+    const { password, role, nhgName } = req.body;
+    const name = String(req.body.name || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const phoneInput = String(req.body.phone || "").trim();
+    const phoneDigits = phoneInput.replace(/\D/g, "");
 
     if (!name || !email || !password || !role) {
       return res.status(400).json({ message: "Please fill all required fields" });
     }
+    if (name.length < 2 || name.length > 80) return res.status(400).json({ message: "Name must be between 2 and 80 characters." });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: "Enter a valid email address." });
+    if (String(password).length < 8) return res.status(400).json({ message: "Password must be at least 8 characters." });
+    if (phoneInput && phoneDigits.length !== 10) return res.status(400).json({ message: "Phone number must contain 10 digits." });
 
     const signupRole = String(role).toLowerCase();
     if (!["member", "secretary", "nhg_secretary", "ads_officer", "cds_officer", "ads_cds_officer"].includes(signupRole)) {
@@ -72,7 +80,7 @@ const registerUser = async (req, res) => {
         member = await Member.create({
           memberId,
           name: name.trim(),
-          phone: phone || "Not Provided",
+          phone: phoneDigits || "Not Provided",
           email: email.toLowerCase().trim(),
           address: userNhg.name,
           nhgName: userNhg.name,
@@ -96,7 +104,7 @@ const registerUser = async (req, res) => {
       role: memberRole ? "MEMBER" : role,
       nhgName: memberRole ? userNhg.name : nhgName,
       nhgId: userNhg?.nhgId || "",
-      phone,
+      phone: phoneDigits,
       qrCode: undefined,
       memberId: memberId || "",
     });

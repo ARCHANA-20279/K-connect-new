@@ -2,6 +2,7 @@ const Loan = require("../models/Loan");
 const NHG = require("../models/NHG");
 const Member = require("../models/Member");
 const Notification = require("../models/Notification");
+const Thrift = require("../models/Thrift");
 
 const roleOf = (user) => (user?.role || "").toLowerCase();
 const isMainAdmin = (role) => ["main_admin", "super_admin", "superadmin"].includes((role || "").toLowerCase());
@@ -31,6 +32,15 @@ const addHistory = (loan, user, stage, decision, reference = "", remarks = "") =
   });
 };
 const canReviewNhgLoan = (user, loan) => isMainAdmin(roleOf(user)) || sameNhg(user, loan);
+const getRecordedThriftTotal = async (memberId) => {
+  const [result] = await Thrift.aggregate([
+    { $match: { memberId } },
+    { $group: { _id: null, total: { $sum: "$amount" } } },
+  ]);
+  return Number(result?.total) || 0;
+};
+const thriftLimitMessage = (amount, savings) =>
+  `Requested loan amount ₹${Number(amount).toLocaleString("en-IN")} exceeds the member's recorded thrift total of ₹${Number(savings).toLocaleString("en-IN")}. The demo policy does not allow sanctioning above recorded thrift.`;
 
 const createLoan = async (req, res) => {
   try {
@@ -39,6 +49,10 @@ const createLoan = async (req, res) => {
     const { loanType, amount, purpose } = req.body;
     if (!loanType || !purpose || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
       return res.status(400).json({ message: "Loan type, purpose, and a valid amount are required." });
+    }
+    const thriftTotal = await getRecordedThriftTotal(member.memberId);
+    if (Number(amount) > thriftTotal) {
+      return res.status(400).json({ message: thriftLimitMessage(amount, thriftTotal), thriftTotal });
     }
     const nhgName = member.nhgName || req.user.nhgName || "";
     let nhgId = member.nhgId || req.user.nhgId || "";
@@ -122,6 +136,10 @@ const secretaryReview = async (req, res) => {
     if (!loan) return res.status(404).json({ message: "Loan not found" });
     if (!canReviewNhgLoan(req.user, loan)) return res.status(403).json({ message: "This loan belongs to another NHG." });
     if (loan.status !== "Pending") return res.status(400).json({ message: "This application is no longer waiting for NHG review." });
+    const thriftTotal = await getRecordedThriftTotal(loan.memberId);
+    if (Number(loan.amount) > thriftTotal) {
+      return res.status(400).json({ message: thriftLimitMessage(loan.amount, thriftTotal), thriftTotal });
+    }
     if (eligible !== true) return res.status(400).json({ message: "Confirm that the member's eligibility has been checked before forwarding." });
     const resolution = (meetingResolution || "").trim();
     if (!resolution) return res.status(400).json({ message: "Enter the NHG meeting resolution or minutes reference." });
@@ -158,6 +176,10 @@ const approveAtLevel = (level) => async (req, res) => {
     if (level === "ADS" && !sameNhg(req.user, loan)) return res.status(403).json({ message: "This loan is outside your assigned review area." });
     const expectedStatus = level === "ADS" ? "ADS Review" : "CDS Review";
     if (loan.status !== expectedStatus) return res.status(400).json({ message: `This loan is not awaiting ${level} review.` });
+    const thriftTotal = await getRecordedThriftTotal(loan.memberId);
+    if (Number(loan.amount) > thriftTotal) {
+      return res.status(400).json({ message: thriftLimitMessage(loan.amount, thriftTotal), thriftTotal });
+    }
     const reference = (req.body.reference || "").trim();
     if (!reference) return res.status(400).json({ message: `Enter the ${level} meeting or review reference.` });
     const remarks = (req.body.remarks || "").trim();
@@ -212,7 +234,11 @@ const recordBankDecision = async (req, res) => {
     if (!loan) return res.status(404).json({ message: "Loan not found" });
     if (!["Bank Review", "Bank Approved"].includes(loan.status)) return res.status(400).json({ message: "This application is not awaiting a bank decision or disbursement." });
     if (!reference?.trim()) return res.status(400).json({ message: "Enter the bank decision or communication reference." });
+    const thriftTotal = await getRecordedThriftTotal(loan.memberId);
     if (loan.status === "Bank Approved" && decision === "Disbursed") {
+      if (Number(loan.approvedAmount) > thriftTotal) {
+        return res.status(400).json({ message: thriftLimitMessage(loan.approvedAmount, thriftTotal), thriftTotal });
+      }
       loan.status = "Repayment";
       loan.remainingAmount = loan.approvedAmount;
       loan.sanctionDate = new Date();
@@ -236,6 +262,9 @@ const recordBankDecision = async (req, res) => {
     const rate = Number(interestRate);
     if (decision !== "Approved" || loan.status !== "Bank Review" || !Number.isFinite(amount) || amount <= 0 || !Number.isFinite(rate) || rate < 0) {
       return res.status(400).json({ message: "Record the bank's approval with its approved amount and interest rate, then record disbursement separately." });
+    }
+    if (amount > thriftTotal) {
+      return res.status(400).json({ message: thriftLimitMessage(amount, thriftTotal), thriftTotal });
     }
     loan.status = "Bank Approved";
     loan.approvedAmount = amount;
