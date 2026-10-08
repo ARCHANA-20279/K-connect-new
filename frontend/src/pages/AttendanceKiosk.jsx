@@ -18,6 +18,7 @@ const AttendanceKiosk = () => {
   const [selectedMeetingId, setSelectedMeetingId] = useState("");
   const [meetingData, setMeetingData] = useState(null);
   const [loadingMeeting, setLoadingMeeting] = useState(false);
+  const [refreshingAttendance, setRefreshingAttendance] = useState(false);
 
   // Active view tab for Secretary / Member
   // Secretary: 'displayQr' | 'scanner'
@@ -80,6 +81,17 @@ const AttendanceKiosk = () => {
       }
     } catch (err) {
       console.error("Failed to load meetings list:", err);
+    }
+  };
+
+  const handleRefreshAttendance = async () => {
+    setRefreshingAttendance(true);
+    try {
+      await fetchMeetingsList();
+      if (selectedMeetingId) await fetchMeetingAttendance(selectedMeetingId);
+      if (isMember) await checkMemberAttendanceStatus();
+    } finally {
+      setRefreshingAttendance(false);
     }
   };
 
@@ -477,15 +489,24 @@ const AttendanceKiosk = () => {
           </div>
 
           <div className="col-md-5 d-flex justify-content-md-end align-items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-success"
+              onClick={handleRefreshAttendance}
+              disabled={refreshingAttendance || loadingMeeting}
+              title="Reload meeting and attendance information without changing records"
+            >
+              {refreshingAttendance || loadingMeeting ? "Refreshing…" : "↻ Refresh Attendance"}
+            </button>
             {isSecretary && (
               <>
                 <button
                   type="button"
-                  className="btn btn-sm btn-outline-danger"
+                  className="btn btn-sm btn-outline-secondary"
                   onClick={handleResetMeetingAttendance}
-                  title="Clear attendance for this meeting (for demo testing)"
+                  title="Testing only: remove attendance records so members can scan again"
                 >
-                  🔄 Clear Meeting Records
+                  Clear Records (Testing)
                 </button>
                 <Link to="/meetings" className="btn btn-sm btn-outline-primary">
                   ➕ Schedule New

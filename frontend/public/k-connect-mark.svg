@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 78 74" role="img" aria-labelledby="title">
+  <title id="title">K-Connect community mark</title>
+  <g fill="none" stroke="#a7f3d0" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5">
+    <path d="M36 57c1-16 2-25 1-35M37 43C24 42 18 35 17 25c11 0 19 6 21 17M38 37c3-13 11-20 22-21 0 11-7 20-21 24M37 51c-9-8-18-9-27-5 5 10 14 14 27 12M38 51c8-9 18-11 28-7-4 11-14 16-28 15"/>
+  </g>
+  <circle cx="37" cy="20" r="4" fill="#dfaa54"/>
+  <path d="M20 64c9-7 25-10 39-4l7 6H15z" fill="#7ba75f"/>
+</svg>

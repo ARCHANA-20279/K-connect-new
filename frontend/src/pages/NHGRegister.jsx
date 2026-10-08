@@ -48,6 +48,14 @@ const NHGRegister = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    if (formData.password.length < 8) {
+      setError("Create a password with at least 8 characters.");
+      return;
+    }
+    if (!/^\d{10}$/.test(formData.secretaryMobileNumber.replace(/\D/g, ""))) {
+      setError("Enter a valid 10-digit Secretary mobile number.");
+      return;
+    }
     setLoading(true);
 
     try {
@@ -165,7 +173,9 @@ const NHGRegister = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} autoComplete="off">
+              <input aria-hidden="true" tabIndex={-1} autoComplete="username" className="position-absolute opacity-0" style={{ width: 1, height: 1, top: -1000 }} />
+              <input aria-hidden="true" tabIndex={-1} type="password" autoComplete="current-password" className="position-absolute opacity-0" style={{ width: 1, height: 1, top: -1000 }} />
               {/* SECTION 1: NHG BASIC DETAILS */}
               <div className="mb-4">
                 <h5 className="fw-bold pb-2 border-bottom" style={{ color: "#0f766e", fontSize: "16px" }}>
@@ -183,6 +193,9 @@ const NHGRegister = () => {
                       placeholder="e.g. Deepam NHG, Sneha NHG, Jyothi NHG"
                       value={formData.nhgName}
                       onChange={handleChange}
+                      autoComplete="off"
+                      minLength={2}
+                      maxLength={100}
                       required
                     />
                   </div>
@@ -234,6 +247,7 @@ const NHGRegister = () => {
                       placeholder="e.g. Pariyaram Grama Panchayat"
                       value={formData.localBodyName}
                       onChange={handleChange}
+                      autoComplete="off"
                       required
                     />
                   </div>
@@ -249,6 +263,8 @@ const NHGRegister = () => {
                       placeholder="e.g. 15"
                       value={formData.wardNumber}
                       onChange={handleChange}
+                      inputMode="numeric"
+                      pattern="[0-9]{1,3}"
                       required
                     />
                   </div>
@@ -317,6 +333,7 @@ const NHGRegister = () => {
                       placeholder="e.g. Archana M"
                       value={formData.secretaryName}
                       onChange={handleChange}
+                      autoComplete="off"
                       required
                     />
                   </div>
@@ -332,6 +349,10 @@ const NHGRegister = () => {
                       placeholder="e.g. 9876543210"
                       value={formData.secretaryMobileNumber}
                       onChange={handleChange}
+                      autoComplete="off"
+                      inputMode="numeric"
+                      maxLength={10}
+                      pattern="[0-9]{10}"
                       required
                     />
                   </div>
@@ -347,6 +368,8 @@ const NHGRegister = () => {
                       placeholder="secretary@example.com"
                       value={formData.secretaryEmail}
                       onChange={handleChange}
+                      autoComplete="off"
+                      autoCapitalize="none"
                       required
                     />
                   </div>
@@ -362,8 +385,9 @@ const NHGRegister = () => {
                       placeholder="••••••••"
                       value={formData.password}
                       onChange={handleChange}
+                      autoComplete="new-password"
                       required
-                      minLength={6}
+                      minLength={8}
                     />
                     <small className="text-muted" style={{ fontSize: "11px" }}>
                       You will use this password once Admin approves your NHG.

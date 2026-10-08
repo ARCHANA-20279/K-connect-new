@@ -9,7 +9,7 @@ const Footer = () => {
         <div className="row g-4 align-items-center">
           <div className="col-md-4">
             <div className="d-flex align-items-center gap-2">
-              <span style={{ fontSize: "24px" }}>🌱</span>
+              <img src="/k-connect-mark.svg" alt="" width="34" height="34" />
               <div>
                 <h5 className="fw-bold mb-0 text-white">K-Connect</h5>
                 <small style={{ color: "#a7f3d0", fontSize: "12px" }}>
@@ -25,7 +25,7 @@ const Footer = () => {
           <div className="col-md-4 text-center">
             <div className="d-flex justify-content-center gap-4 small">
               <Link to="/" className="text-white-50 text-decoration-none hover-white">Home</Link>
-              <a href="#about" className="text-white-50 text-decoration-none hover-white">About</a>
+              <Link to="/about" className="text-white-50 text-decoration-none hover-white">About K-Connect</Link>
               <a href="#services" className="text-white-50 text-decoration-none hover-white">Services</a>
               <a href="#notices" className="text-white-50 text-decoration-none hover-white">Notices</a>
               <Link to="/register-nhg" className="text-white-50 text-decoration-none hover-white">Register NHG</Link>

@@ -1,6 +1,7 @@
 const Thrift = require("../models/Thrift");
 const Member = require("../models/Member");
 const NHG = require("../models/NHG");
+const { calculateCreditScore } = require("../services/creditScoreService");
 
 // 1. Record Thrift Deposit (Secretary Only)
 const recordThrift = async (req, res) => {
@@ -49,6 +50,7 @@ const recordThrift = async (req, res) => {
       nhgName,
       nhgId,
     });
+    await calculateCreditScore(member.memberId).catch((scoreError) => console.warn("Could not refresh member credit score:", scoreError.message));
 
     return res.status(201).json({
       message: `Thrift deposit of ₹${amount} recorded for ${member.name} (Receipt: ${receiptNumber})`,
@@ -200,6 +202,7 @@ const updateThrift = async (req, res) => {
     if (remarks !== undefined) thrift.remarks = remarks;
 
     await thrift.save();
+    await calculateCreditScore(thrift.memberId).catch((scoreError) => console.warn("Could not refresh member credit score:", scoreError.message));
     return res.status(200).json({ message: "Thrift record updated", thrift });
   } catch (error) {
     console.error("Update thrift error:", error);
@@ -217,6 +220,7 @@ const deleteThrift = async (req, res) => {
     const belongsToNhg = (user.nhgId && thrift.nhgId === user.nhgId) || (user.nhgName && thrift.nhgName === user.nhgName);
     if (!belongsToNhg) return res.status(403).json({ message: "You can only manage thrift records for your NHG." });
     await thrift.deleteOne();
+    await calculateCreditScore(thrift.memberId).catch((scoreError) => console.warn("Could not refresh member credit score:", scoreError.message));
     return res.status(200).json({ message: "Thrift record deleted" });
   } catch (error) {
     return res.status(500).json({ message: "Failed to delete", error: error.message });

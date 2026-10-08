@@ -63,6 +63,19 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    creditScore: {
+      score: { type: Number, min: 0, max: 100, default: 50 },
+      tier: { type: String, enum: ["Excellent", "Good", "Fair", "Needs Improvement"], default: "Fair" },
+      attendancePercent: { type: Number, min: 0, max: 100, default: 0 },
+      thriftConsistencyPercent: { type: Number, min: 0, max: 100, default: 0 },
+      onTimeRepaymentPercent: { type: Number, min: 0, max: 100, default: 100 },
+      calculatedAt: { type: Date, default: Date.now },
+    },
+    passwordResetTokenHash: { type: String, select: false },
+    passwordResetExpires: { type: Date, select: false },
+    passwordResetCodeHash: { type: String, select: false },
+    passwordResetCodeExpires: { type: Date, select: false },
+    passwordResetCodeAttempts: { type: Number, default: 0, select: false },
   },
   { timestamps: true }
 );

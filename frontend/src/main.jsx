@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "bootstrap/dist/css/bootstrap.min.css";
+import "./portal.css";
 import "./i18n/i18n";
 import { AuthProvider } from "./context/AuthContext";
 import App from "./App.jsx";

@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
 import api from "../api";
+import { io } from "socket.io-client";
 import "../portal.css";
 
 const LoanManagement = () => {
@@ -33,7 +34,15 @@ const LoanManagement = () => {
 
   // Active Tab: 'myLoans' (default for members), 'apply', 'register' (default for secretary)
   const [activeTab, setActiveTab] = useState(canViewRegister ? "register" : "myLoans");
+  // Auth is restored asynchronously. Re-select the correct role tab once the
+  // role is known so staff never land in the member application form.
+  useEffect(() => {
+    setActiveTab(canViewRegister ? "register" : "myLoans");
+  }, [canViewRegister]);
   const [selectedMemberId, setSelectedMemberId] = useState(user?.memberId || "");
+  const [memberThriftAmount, setMemberThriftAmount] = useState(null);
+  const [memberCreditScore, setMemberCreditScore] = useState(null);
+  const [maximumLoanAmount, setMaximumLoanAmount] = useState(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -48,6 +57,9 @@ const LoanManagement = () => {
   const [sanctionModal, setSanctionModal] = useState({
     show: false,
     loan: null,
+    memberThriftAmount: null,
+    thriftLoading: false,
+    thriftError: "",
     approvedAmount: "",
     interestRate: 4,
     installmentsCount: 10,
@@ -112,6 +124,23 @@ const LoanManagement = () => {
               prev.memberName,
           }));
         }
+        if (matchedId) {
+          try {
+            const [thriftRes, scoreRes] = await Promise.all([
+              api.get(`/thrift/passbook/${matchedId}`),
+              api.get("/loans/credit-score/me"),
+            ]);
+            setMemberThriftAmount(Number(thriftRes.data.totalSaved) || 0);
+            setMemberCreditScore(scoreRes.data.creditScore);
+            setMaximumLoanAmount(Number(scoreRes.data.maximumLoanAmount) || 0);
+            setFormData((prev) => Number(prev.amount) > Number(scoreRes.data.maximumLoanAmount)
+              ? { ...prev, amount: Number(scoreRes.data.maximumLoanAmount) > 0 ? String(scoreRes.data.maximumLoanAmount) : "" }
+              : prev);
+          } catch (thriftError) {
+            console.error("Failed to load member thrift for loan eligibility:", thriftError);
+            setMemberThriftAmount(0);
+          }
+        }
       }
     } catch (error) {
       console.error("Failed to fetch loan data:", error);
@@ -123,6 +152,40 @@ const LoanManagement = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!isSecretary) return undefined;
+    const refreshQueue = async () => {
+      try {
+        const response = await api.get("/loans");
+        if (Array.isArray(response.data)) setLoans(response.data);
+      } catch (error) {
+        console.error("Failed to refresh NHG loan queue:", error);
+      }
+    };
+    const refreshTimer = window.setInterval(refreshQueue, 15000);
+    return () => window.clearInterval(refreshTimer);
+  }, [isSecretary]);
+
+  useEffect(() => {
+    if (!isMember) return undefined;
+    let storedUser;
+    try { storedUser = JSON.parse(localStorage.getItem("kconnect_user") || "null"); } catch { storedUser = null; }
+    if (!storedUser?.token) return undefined;
+    const socket = io("http://localhost:5000", { auth: { token: storedUser.token }, transports: ["websocket", "polling"] });
+    socket.on("loan:vote-request", fetchData);
+    socket.on("loan:vote-update", fetchData);
+    return () => socket.disconnect();
+  }, [isMember]);
+
+  const castPeerVote = async (loan, decision) => {
+    try {
+      await api.post(`/loans/${loan._id}/peer-vote`, { decision });
+      await fetchData();
+    } catch (error) {
+      alert(error.response?.data?.message || (isMl ? "വോട്ട് രേഖപ്പെടുത്താനായില്ല." : "Could not record your vote."));
+    }
+  };
 
   useEffect(() => {
     if (!isAdsWorkspace) return undefined;
@@ -193,20 +256,37 @@ const LoanManagement = () => {
   };
 
   // Open Sanction Modal
-  const openSanctionModal = (loan) => {
+  const openSanctionModal = async (loan) => {
     setSanctionModal({
       show: true,
       loan,
+      memberThriftAmount: null,
+      thriftLoading: true,
+      thriftError: "",
       eligible: false,
       meetingResolution: "",
       remarks: "",
     });
+    try {
+      const thriftRes = await api.get(`/thrift/passbook/${loan.memberId}`);
+      setSanctionModal((current) => current.loan?._id === loan._id
+        ? { ...current, memberThriftAmount: Number(thriftRes.data.totalSaved) || 0, thriftLoading: false }
+        : current);
+    } catch (error) {
+      setSanctionModal((current) => current.loan?._id === loan._id
+        ? { ...current, thriftLoading: false, thriftError: error.response?.data?.message || "Could not load this member's thrift total." }
+        : current);
+    }
   };
 
   // Submit Sanction
   const handleConfirmSanction = async (e) => {
     e.preventDefault();
     if (!sanctionModal.loan) return;
+    if (sanctionModal.memberThriftAmount === null || Number(sanctionModal.loan.amount) > sanctionModal.memberThriftAmount) {
+      alert(isMl ? "അപേക്ഷ തുക അംഗത്തിന്റെ രേഖപ്പെടുത്തിയ ത്രിഫ്റ്റ് തുകയേക്കാൾ കൂടുതലാണ്." : "The requested loan is greater than the member's recorded thrift total.");
+      return;
+    }
     try {
       await api.post(`/loans/${sanctionModal.loan._id}/secretary-review`, {
         eligible: sanctionModal.eligible,
@@ -358,14 +438,14 @@ const LoanManagement = () => {
   const totalRepaid = loans.reduce((sum, l) => sum + (Number(l.repaymentAmount) || 0), 0);
   const pendingCount = loans.filter((l) => !["Rejected", "Completed", "Repayment", "Approved"].includes(l.status)).length;
   const statusLabel = (status) => {
-    if (!isMl) return ({ Pending: "Secretary review", "ADS Review": "ADS review", "CDS Review": "CDS review", "Bank Review": "Demo bank review", "Bank Approved": "Demo bank approved · awaiting simulated disbursement", Repayment: "Repayment", Approved: "Legacy approved", Rejected: "Rejected", Completed: "Completed" })[status] || status;
-    return ({ Pending: "സെക്രട്ടറി പരിശോധന", "ADS Review": "എ.ഡി.എസ് പരിശോധന", "CDS Review": "സി.ഡി.എസ് പരിശോധന", "Bank Review": "ഡെമോ ബാങ്ക് പരിശോധന", "Bank Approved": "ഡെമോ ബാങ്ക് അംഗീകരിച്ചു · സിമുലേറ്റഡ് വിതരണം കാത്തിരിക്കുന്നു", Repayment: "തിരിച്ചടവ്", Approved: "അംഗീകരിച്ചു", Rejected: "നിരസിച്ചു", Completed: "പൂർത്തിയായി" })[status] || status;
+    if (!isMl) return ({ "NHG Voting": "NHG member vote", Pending: "Secretary review", "ADS Review": "ADS review", "CDS Review": "CDS review", "Bank Review": "Demo bank review", "Bank Approved": "Demo bank approved · awaiting simulated disbursement", Repayment: "Repayment", Approved: "Legacy approved", Rejected: "Rejected", Completed: "Completed" })[status] || status;
+    return ({ "NHG Voting": "അയൽക്കൂട്ട അംഗങ്ങളുടെ വോട്ട്", Pending: "സെക്രട്ടറി പരിശോധന", "ADS Review": "എ.ഡി.എസ് പരിശോധന", "CDS Review": "സി.ഡി.എസ് പരിശോധന", "Bank Review": "ഡെമോ ബാങ്ക് പരിശോധന", "Bank Approved": "ഡെമോ ബാങ്ക് അംഗീകരിച്ചു · സിമുലേറ്റഡ് വിതരണം കാത്തിരിക്കുന്നു", Repayment: "തിരിച്ചടവ്", Approved: "അംഗീകരിച്ചു", Rejected: "നിരസിച്ചു", Completed: "പൂർത്തിയായി" })[status] || status;
   };
   const workflowStep = (loan) => {
-    const byStatus = { Pending: 1, "ADS Review": 2, "CDS Review": 3, "Bank Review": 4, "Bank Approved": 4, Repayment: 5, Approved: 5, Completed: 6 };
+    const byStatus = { "NHG Voting": 1, Pending: 2, "ADS Review": 3, "CDS Review": 4, "Bank Review": 5, "Bank Approved": 5, Repayment: 6, Approved: 6, Completed: 7 };
     if (loan.status !== "Rejected") return byStatus[loan.status] ?? 0;
     const lastStage = loan.workflowHistory?.[loan.workflowHistory.length - 1]?.stage;
-    return ({ Member: 0, "NHG Secretary": 1, ADS: 2, CDS: 3, Bank: 4, "Repayment verification": 5 })[lastStage] ?? 1;
+    return ({ Member: 0, "NHG Peer Vote": 1, "NHG Secretary": 2, ADS: 3, CDS: 4, Bank: 5, "Repayment verification": 6 })[lastStage] ?? 1;
   };
   const rejectionStageLabel = (loan) => {
     const stage = loan.workflowHistory?.[loan.workflowHistory.length - 1]?.stage;
@@ -392,7 +472,7 @@ const LoanManagement = () => {
 
   // Filtered loans for Member View
   const memberLoans = selectedMemberId
-    ? loans.filter((l) => l.memberId && l.memberId.toLowerCase() === selectedMemberId.toLowerCase())
+    ? loans.filter((l) => (l.memberId && l.memberId.toLowerCase() === selectedMemberId.toLowerCase()) || (isMember && l.status === "NHG Voting" && l.peerApproval?.eligibleVoterIds?.includes(selectedMemberId)))
     : [];
   const adsPendingLoans = loans.filter((loan) => loan.status === "ADS Review");
   const bankPendingLoans = loans.filter((loan) => loan.status === "Bank Review");
@@ -470,7 +550,7 @@ const LoanManagement = () => {
           <a className="btn btn-primary btn-sm" href="#ads-review-queue">{isMl ? "📋 പരിശോധനാ പട്ടികയിലേക്ക്" : "📋 Open ADS review queue"}</a>
         </section>}
 
-        <section className="portal-card mb-4 p-3 p-lg-4">
+        {isMember && <section className="portal-card mb-4 p-3 p-lg-4">
           <div className="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
             <div><h2 className="h5 fw-bold mb-1">{isMl ? "വായ്പയുടെ പരിശോധനാ ക്രമം" : "Loan review and repayment path"}</h2><p className="small text-muted mb-0">{isMl ? "ഓരോ ഘട്ടവും തീയതിയും റഫറൻസും സഹിതം രേഖപ്പെടുത്തും." : "Each hand-off is recorded with its date and reference."}</p></div>
             <span className="badge text-bg-light border">{isMl ? "അപേക്ഷ മുതൽ ഇ.എം.ഐ വരെ" : "Application to EMI"}</span>
@@ -479,7 +559,7 @@ const LoanManagement = () => {
             {(isMl ? [["👤", "അംഗം", "അപേക്ഷ"], ["🤝", "എൻ.എച്ച്.ജി സെക്രട്ടറി", "അർഹത + യോഗ തീരുമാനം"], ["🏘️", "എ.ഡി.എസ്", "പരിശോധിച്ച് അംഗീകരിക്കുന്നു"], ["🏛️", "സി.ഡി.എസ്", "പരിശോധിച്ച് ബാങ്കിലേക്ക്"], ["🏦", "ബാങ്ക്", "തീരുമാനവും വിതരണവും"], ["₹", "അംഗം", "ഇ.എം.ഐ തിരിച്ചടവ്"]] : [["👤", "Member", "Apply"], ["🤝", "NHG Secretary", "Eligibility + resolution"], ["🏘️", "ADS", "Verify and approve"], ["🏛️", "CDS", "Verify and forward"], ["🏦", "Bank", "Decision and disbursement"], ["₹", "Member", "Repay EMI"]]).map(([icon, title, detail], index) => <div className="col-6 col-md-4 col-xl-2" key={title}><div className={`h-100 p-2 border rounded-3 ${overviewStageClass(index)}`}><div className="fs-4">{icon}</div><strong className="small d-block">{index + 1}. {title}</strong><span className="small">{detail}</span></div></div>)}
           </div>
           <div className="alert alert-info small mt-3 mb-0">{isMl ? "സമയത്ത് അടച്ച ഗഡുക്കൾ 5% സബ്‌സിഡി പരിശോധനയ്ക്ക് സ്ഥാനാർഥിയായി രേഖപ്പെടുത്തും. യഥാർത്ഥ യോഗ്യതയും തുകയും ബാധകമായ പദ്ധതി ചട്ടങ്ങളും ബാങ്കിന്റെ സ്ഥിരീകരണവും അനുസരിച്ചായിരിക്കും; K-Connect സബ്‌സിഡി സ്വമേധയാ ക്രെഡിറ്റ് ചെയ്യില്ല." : "On-time installments are flagged as potential candidates for a 5% subsidy review. Actual eligibility and amount depend on the applicable scheme and bank confirmation; K-Connect does not credit a subsidy automatically."}</div>
-        </section>
+        </section>}
 
         {/* KPI METRIC CARDS */}
         <div className="row g-3 mb-4">
@@ -691,7 +771,7 @@ const LoanManagement = () => {
                             <span className="badge text-bg-primary">{statusLabel(loan.status)}</span>
                           </div>
                           <div className="d-flex flex-wrap gap-2 mb-3">
-                            {(isMl ? ["അംഗം", "എൻ.എച്ച്.ജി സെക്രട്ടറി", "എ.ഡി.എസ്", "സി.ഡി.എസ്", "ബാങ്ക്", "ഇ.എം.ഐ"] : ["Member", "NHG Secretary", "ADS", "CDS", "Bank", "EMI"]).map((stage, index) => (
+                            {(isMl ? ["അംഗം", "അയൽക്കൂട്ട വോട്ട്", "എൻ.എച്ച്.ജി സെക്രട്ടറി", "എ.ഡി.എസ്", "സി.ഡി.എസ്", "ബാങ്ക്", "ഇ.എം.ഐ"] : ["Member", "NHG vote", "NHG Secretary", "ADS", "CDS", "Bank", "EMI"]).map((stage, index) => (
                               <span
                                 key={stage}
                                 className={`badge rounded-pill ${loan.status === "Rejected" && index === completedWorkflowStep ? "text-bg-danger" : index < completedWorkflowStep ? "text-bg-success" : loan.status !== "Rejected" && index === completedWorkflowStep ? "text-bg-warning" : "text-bg-light border text-secondary"}`}
@@ -706,6 +786,18 @@ const LoanManagement = () => {
                             {loan.workflowHistory.slice(-5).map((entry, index) => <div key={`${entry.at}-${index}`}>• {entry.stage}: {entry.decision}{entry.reference ? ` (${entry.reference})` : ""} — {entry.actor}</div>)}
                           </div>}
                         </div>
+                        {loan.peerApproval?.eligibleVoterIds?.length > 0 && <div className={`alert ${loan.status === "NHG Voting" ? "alert-info" : "alert-light border"} d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2`}>
+                          <div>
+                            <strong>{isMl ? "അയൽക്കൂട്ടത്തിന്റെ അംഗീകാരം" : "NHG peer approval"}</strong>
+                            <div className="small">{isMl ? `${loan.peerApproval.votes?.filter((vote) => vote.decision === "Approve").length || 0}/${loan.peerApproval.requiredApprovals} അംഗീകാരങ്ങൾ · ${loan.peerApproval.votes?.length || 0}/${loan.peerApproval.eligibleVoterIds.length} വോട്ടുകൾ` : `${loan.peerApproval.votes?.filter((vote) => vote.decision === "Approve").length || 0}/${loan.peerApproval.requiredApprovals} approvals · ${loan.peerApproval.votes?.length || 0}/${loan.peerApproval.eligibleVoterIds.length} votes`}</div>
+                            {isMember && loan.memberId !== selectedMemberId && <div className="small text-muted">{isMl ? `${loan.memberName} സമർപ്പിച്ച അപേക്ഷ` : `Requested by ${loan.memberName}`}</div>}
+                          </div>
+                          {isMember && loan.status === "NHG Voting" && loan.memberId !== selectedMemberId && loan.peerApproval.eligibleVoterIds.includes(selectedMemberId) && !loan.peerApproval.votes?.some((vote) => vote.memberId === selectedMemberId) && <div className="d-flex gap-2">
+                            <button className="btn btn-sm btn-success" onClick={() => castPeerVote(loan, "Approve")}>{isMl ? "അംഗീകരിക്കുക" : "Approve"}</button>
+                            <button className="btn btn-sm btn-outline-danger" onClick={() => castPeerVote(loan, "Reject")}>{isMl ? "നിരസിക്കുക" : "Reject"}</button>
+                          </div>}
+                          {loan.peerApproval.votes?.some((vote) => vote.memberId === selectedMemberId) && <span className="badge text-bg-secondary">{isMl ? "നിങ്ങളുടെ വോട്ട് രേഖപ്പെടുത്തി" : "Your vote recorded"}</span>}
+                        </div>}
                         {loan.status === "Bank Review" && <div className="alert alert-warning border-warning" role="status"><strong>{isMl ? "സി.ഡി.എസ് പരിശോധന പൂർത്തിയായി" : "CDS review complete"}</strong> {isMl ? "നിങ്ങളുടെ അപേക്ഷ ഡെമോ ബാങ്ക് തീരുമാനത്തിനായി അയച്ചു." : "Your application has been forwarded for a demo bank decision."}</div>}
                         {loan.status === "Bank Approved" && <div className="alert alert-success border-success" role="status"><strong>{isMl ? "ഡെമോ ബാങ്ക് വായ്പ അംഗീകരിച്ചു" : "Demo bank approval recorded"}</strong> {isMl ? `₹${Number(loan.approvedAmount).toLocaleString()} അംഗീകരിച്ചു. ഡെമോ വിതരണം രേഖപ്പെടുത്തുന്നതുവരെ ഇ.എം.ഐ ആരംഭിക്കില്ല. യഥാർത്ഥ പണമിടപാട് നടന്നിട്ടില്ല.` : `₹${Number(loan.approvedAmount).toLocaleString()} was approved. EMI starts only after the demo disbursement is recorded. No real funds were transferred.`}{loan.bankDecision?.reference ? <span className="d-block small mt-1">{isMl ? "ഡെമോ റഫറൻസ്:" : "Demo reference:"} {loan.bankDecision.reference}</span> : null}</div>}
                         {/* CASE 1: PENDING APPROVAL */}
@@ -1098,14 +1190,25 @@ const LoanManagement = () => {
                         name="amount"
                         className="form-control"
                         placeholder="Enter amount in ₹"
-                        min="500"
-                        step="500"
+                        min="1"
+                        step="1"
+                        max={isMember && maximumLoanAmount !== null ? maximumLoanAmount : undefined}
                         value={formData.amount}
                         onChange={handleChange}
                         required
                       />
-                      <small className="text-muted" style={{ fontSize: "11px" }}>
-                        Kudumbashree subsidized rate: 4% per annum
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>
+                        {isMember
+                          ? memberThriftAmount === null
+                            ? "Loading your recorded thrift total…"
+                            : `Trust score: ${memberCreditScore?.score ?? "—"}/100 (${memberCreditScore?.tier || "calculating"}) · Attendance ${memberCreditScore?.attendancePercent ?? "—"}% · Thrift consistency ${memberCreditScore?.thriftConsistencyPercent ?? "—"}% · On-time repayments ${memberCreditScore?.onTimeRepaymentPercent ?? "—"}%. Maximum request: ₹${Number(maximumLoanAmount || 0).toLocaleString()} from recorded thrift of ₹${memberThriftAmount.toLocaleString()}.`
+                          : "The requested amount must not exceed the member's recorded thrift total."}
+                      </small>
+                      {isMember && maximumLoanAmount !== null && Number(formData.amount) > maximumLoanAmount && (
+                        <small className="text-danger d-block mt-1">Requested amount exceeds your current trust-score limit.</small>
+                      )}
+                      <small className="text-muted d-block mt-1" style={{ fontSize: "11px" }}>
+                        Final eligibility is also subject to NHG, ADS/CDS, and applicable bank scheme review.
                       </small>
                     </div>
                   </div>
@@ -1124,7 +1227,7 @@ const LoanManagement = () => {
                   </div>
 
                   <div className="d-flex gap-2">
-                    <button type="submit" className="btn btn-primary fw-semibold px-4 py-2">
+                    <button type="submit" className="btn btn-primary fw-semibold px-4 py-2" disabled={isMember && (maximumLoanAmount === null || Number(formData.amount) > maximumLoanAmount)}>
                       ✓ {t("submit")}
                     </button>
                     <button
@@ -1327,13 +1430,24 @@ const LoanManagement = () => {
                   Review for <strong>{sanctionModal.loan?.memberName}</strong> ({sanctionModal.loan?.memberId}). Requested: <strong>₹{sanctionModal.loan?.amount}</strong>. The NHG Secretary records the eligibility check and meeting resolution before forwarding to ADS.
                 </p>
 
+                <div className={`alert ${sanctionModal.thriftError || (sanctionModal.memberThriftAmount !== null && Number(sanctionModal.loan?.amount) > sanctionModal.memberThriftAmount) ? "alert-danger" : "alert-success"} py-2`} role="status">
+                  {sanctionModal.thriftLoading
+                    ? "Checking recorded thrift total…"
+                    : sanctionModal.thriftError
+                    ? sanctionModal.thriftError
+                    : <>Recorded member thrift: <strong>₹{Number(sanctionModal.memberThriftAmount || 0).toLocaleString()}</strong>. Requested loan must not exceed this amount under the K-Connect demo rule.</>}
+                </div>
+                {sanctionModal.memberThriftAmount !== null && Number(sanctionModal.loan?.amount) > sanctionModal.memberThriftAmount && (
+                  <div className="small text-danger mb-3">This request exceeds the member's recorded thrift and cannot be forwarded for sanction.</div>
+                )}
+
                 <div className="form-group-item mb-3">
                   <label className="form-label fw-semibold">NHG meeting resolution / minutes reference *</label>
                   <input className="form-control" value={sanctionModal.meetingResolution} onChange={(e) => setSanctionModal({ ...sanctionModal, meetingResolution: e.target.value })} placeholder="Meeting no. and resolution" required />
                 </div>
 
                 <div className="form-check border rounded p-3 ps-5 mb-3">
-                  <input className="form-check-input" type="checkbox" id="eligibilityChecked" checked={sanctionModal.eligible} onChange={(e) => setSanctionModal({ ...sanctionModal, eligible: e.target.checked })} required />
+                  <input className="form-check-input" type="checkbox" id="eligibilityChecked" checked={sanctionModal.eligible} onChange={(e) => setSanctionModal({ ...sanctionModal, eligible: e.target.checked })} required disabled={sanctionModal.thriftLoading || Boolean(sanctionModal.thriftError) || sanctionModal.memberThriftAmount === null || Number(sanctionModal.loan?.amount) > sanctionModal.memberThriftAmount} />
                   <label className="form-check-label" htmlFor="eligibilityChecked">I checked the member's eligibility and the NHG meeting resolution.</label>
                 </div>
 
@@ -1351,7 +1465,7 @@ const LoanManagement = () => {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-success fw-bold px-3">
+                <button type="submit" className="btn btn-success fw-bold px-3" disabled={sanctionModal.thriftLoading || Boolean(sanctionModal.thriftError) || sanctionModal.memberThriftAmount === null || Number(sanctionModal.loan?.amount) > sanctionModal.memberThriftAmount}>
                   ✓ Verify & forward to ADS
                 </button>
               </div>

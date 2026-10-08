@@ -5,6 +5,7 @@ import Footer from "./components/Footer";
 import { useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import Register from "./pages/Register";
 import NHGRegister from "./pages/NHGRegister";
 import Dashboard from "./pages/Dashboard";
@@ -21,6 +22,8 @@ import JobAllocation from "./pages/JobAllocation";
 import AuditManagement from "./pages/AuditManagement";
 import Unauthorized from "./pages/Unauthorized";
 import CommunityLearning from "./pages/CommunityLearning";
+import CommunityHub from "./pages/CommunityHub";
+import AboutKConnect from "./pages/AboutKConnect";
 
 function App() {
   return (
@@ -33,10 +36,10 @@ function App() {
 function AppRoutes() {
   const { user } = useAuth();
   const location = useLocation();
-  const isLoginPage = ["/login", "/member-login", "/secretary-login"].includes(location.pathname);
+  const isLoginPage = ["/login", "/member-login", "/secretary-login"].includes(location.pathname) || location.pathname.startsWith("/reset-password/");
 
   return (
-    <div className="d-flex flex-column min-vh-100">
+    <div className={`d-flex flex-column min-vh-100 ${user && !isLoginPage ? "kc-dashboard-shell" : ""}`}>
       {!isLoginPage && <TopGovBar />}
       {!isLoginPage && <Navbar />}
       <main className="flex-grow-1">
@@ -46,8 +49,10 @@ function AppRoutes() {
             <Route path="/login" element={<Login />} />
             <Route path="/member-login" element={<Login accountType="member" />} />
             <Route path="/secretary-login" element={<Login accountType="secretary" />} />
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/register" element={<Register />} />
             <Route path="/register-nhg" element={<NHGRegister />} />
+            <Route path="/about" element={<AboutKConnect />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
 
             {/* Community training videos and learning topics */}
@@ -56,6 +61,15 @@ function AppRoutes() {
               element={
                 <ProtectedRoute allowedRoles={["super_admin", "secretary", "member", "ads_cds_officer"]}>
                   <CommunityLearning />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/community-hub"
+              element={
+                <ProtectedRoute allowedRoles={["super_admin", "secretary", "member", "ads_officer", "cds_officer", "ads_cds_officer", "bank_officer"]}>
+                  <CommunityHub />
                 </ProtectedRoute>
               }
             />

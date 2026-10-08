@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { QRCodeCanvas } from "qrcode.react";
 import { useTranslation } from "react-i18next";
+import LanguageSwitcher from "./LanguageSwitcher";
 
 const Navbar = () => {
   const { user, logout } = useAuth();
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
+  const isMl = i18n.resolvedLanguage === "ml" || i18n.language === "ml";
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -24,8 +25,9 @@ const Navbar = () => {
   const isAdsOfficer = ["adsofficer", "adscdsofficer"].includes(normalizedRole);
   const isCdsOfficer = ["cdsofficer", "adscdsofficer"].includes(normalizedRole);
 
-  const [showQrModal, setShowQrModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => setMobileMenuOpen(false), [location.pathname]);
 
   const isActive = (path) => location.pathname === path;
 
@@ -36,58 +38,19 @@ const Navbar = () => {
 
   return (
     <nav
-      className="navbar navbar-expand-lg sticky-top bg-white py-2 px-3 px-lg-4"
+      className={`navbar navbar-expand-xl bg-white py-2 px-3 px-lg-4 kc-main-navbar ${user ? "kc-sidebar-navbar" : "kc-public-navbar"}`}
       style={{
         boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
         borderBottom: "1px solid #e2e8f0",
       }}
     >
       <div className="container-fluid px-0">
-        {/* BRAND LOGO - Matching image */}
+        {/* K-Connect Kudumbashree brand mark */}
         <Link
-          className="navbar-brand d-flex align-items-center gap-2 text-decoration-none"
+          className="navbar-brand d-flex align-items-center gap-2 text-decoration-none kc-navbar-brand"
           to={user ? "/dashboard" : "/"}
         >
-          {/* Flower sprout logo icon */}
-          <div
-            style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "50%",
-              backgroundColor: "#ecfdf5",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "20px",
-              border: "1px solid #a7f3d0",
-            }}
-          >
-            🌱
-          </div>
-          <div>
-            <div className="d-flex align-items-center gap-2">
-              <span
-                className="fw-bold"
-                style={{
-                  fontSize: "20px",
-                  color: "#0f766e",
-                  letterSpacing: "-0.5px",
-                }}
-              >
-                K-Connect
-              </span>
-            </div>
-            <small
-              className="d-block text-muted"
-              style={{ fontSize: "11px", fontWeight: 500, lineHeight: 1 }}
-            >
-              {isMainAdmin
-                ? "Central Admin Console"
-                : user?.nhgName
-                ? `${user.nhgName} ${user.nhgId ? `(${user.nhgId})` : ""}`
-                : "Kudumbashree NHG Platform"}
-            </small>
-          </div>
+          <img className="kc-navbar-logo" src="/k-connect-logo.svg" alt="K-Connect — Kudumbashree NHG Platform" />
         </Link>
 
         {/* Mobile Toggle Button */}
@@ -116,14 +79,14 @@ const Navbar = () => {
                     style={
                       isActive("/")
                         ? {
-                            backgroundColor: "#d1fae5",
-                            color: "#065f46",
+                            backgroundColor: "#e3f1f3",
+                            color: "#1a5965",
                             borderRadius: "20px",
                           }
                         : {}
                     }
                   >
-                    Home
+                    {isMl ? "ഹോം" : "Home"}
                   </Link>
                 </li>
 
@@ -132,60 +95,61 @@ const Navbar = () => {
                     to="/loans"
                     className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/loans") ? "active-role-nav" : "text-dark"}`}
                   >
-                    💰 {i18n.resolvedLanguage === "ml" || i18n.language === "ml" ? "വായ്പകൾ" : "Loans"}
+                    💰 {t("navLoans")}
                   </Link>
                 </li>}
                 <li className="nav-item">
-                  <a className="nav-link px-3 py-1 text-dark" href="#about">
-                    About
-                  </a>
+                  <Link className={`nav-link px-3 py-1 fw-semibold ${isActive("/about") ? "active-public-nav" : "text-dark"}`} to="/about">
+                    {isMl ? "ഞങ്ങളെക്കുറിച്ച്" : "About"}
+                  </Link>
                 </li>
                 <li className="nav-item">
                   <a className="nav-link px-3 py-1 text-dark" href="#services">
-                    Services
+                    {isMl ? "സേവനങ്ങൾ" : "Services"}
                   </a>
                 </li>
                 <li className="nav-item">
                   <a className="nav-link px-3 py-1 text-dark" href="#notices">
-                    Notices
+                    {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
                   </a>
                 </li>
                 <li className="nav-item">
                   <a className="nav-link px-3 py-1 text-dark" href="#contact">
-                    Contact
+                    {isMl ? "ബന്ധപ്പെടുക" : "Contact"}
                   </a>
                 </li>
               </ul>
 
               {/* Login and Register Buttons (Matching Image) */}
               <div className="d-flex align-items-center gap-2">
+                <LanguageSwitcher />
                 <Link
                   to="/login"
                   className="btn btn-sm px-3 py-1 rounded-pill fw-semibold"
                   style={{
                     border: "1px solid #cbd5e1",
-                    color: "#0f766e",
+                    color: "#247b88",
                     backgroundColor: "#ffffff",
                   }}
                 >
-                  👤 Login
+                  👤 {t("login")}
                 </Link>
                 <Link
                   to="/register-nhg"
                   className="btn btn-sm px-3 py-1 rounded-pill fw-semibold text-white shadow-sm"
                   style={{
-                    backgroundColor: "#0f766e",
-                    border: "1px solid #0f766e",
+                    backgroundColor: "#248f9d",
+                    border: "1px solid #248f9d",
                   }}
                 >
-                  👥 Register NHG
+                  👥 {isMl ? "അയൽക്കൂട്ടം രജിസ്റ്റർ ചെയ്യുക" : "Register NHG"}
                 </Link>
               </div>
             </>
           ) : (
             /* IF LOGGED IN: Contextual Navigation Links */
             <>
-              <ul className="navbar-nav me-auto mb-2 mb-lg-0 gap-1">
+              <ul className="navbar-nav me-auto mb-2 mb-lg-0 gap-1 kc-auth-nav-links">
                 {/* 1. Dashboard (All roles) */}
                 <li className="nav-item">
                   <Link
@@ -194,7 +158,7 @@ const Navbar = () => {
                       isActive("/dashboard") ? "active-role-nav" : "text-dark"
                     }`}
                   >
-                    📊 Dashboard
+                    📊 {t("navDashboard")}
                   </Link>
                 </li>
 
@@ -205,7 +169,7 @@ const Navbar = () => {
                       isActive("/learning") ? "active-role-nav" : "text-dark"
                     }`}
                   >
-                    📚 {i18n.resolvedLanguage === "ml" || i18n.language === "ml" ? "പഠനം" : "Learning"}
+                    📚 {isMl ? "പഠനം" : "Learning"}
                   </Link>
                 </li>
 
@@ -221,7 +185,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        🏛️ NHGs & Registrations
+                        🏛️ {isMl ? "അയൽക്കൂട്ടങ്ങളും രജിസ്ട്രേഷനും" : "NHGs & Registrations"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -231,7 +195,7 @@ const Navbar = () => {
                           isActive("/members") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        👥 Members
+                        👥 {t("navMembers")}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -243,7 +207,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📱 Attendance
+                        📱 {t("navAttendance")}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -253,7 +217,7 @@ const Navbar = () => {
                           isActive("/loans") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💰 Loans
+                        💰 {t("navLoans")}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -263,7 +227,7 @@ const Navbar = () => {
                           isActive("/thrift") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💳 Savings
+                        💳 {isMl ? "സമ്പാദ്യം" : "Savings"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -275,7 +239,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📢 Notices
+                        📢 {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
                       </Link>
                     </li>
                   </>
@@ -291,7 +255,7 @@ const Navbar = () => {
                           isActive("/members") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        👥 Members
+                        👥 {t("navMembers")}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -303,7 +267,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📱 Meeting Attendance
+                        📱 {isMl ? "യോഗ ഹാജർ" : "Meeting Attendance"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -315,7 +279,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📅 Meetings
+                        📅 {t("navMeetings")}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -325,7 +289,7 @@ const Navbar = () => {
                           isActive("/thrift") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💳 Savings / Passbook
+                        💳 {isMl ? "സമ്പാദ്യം / പാസ്ബുക്ക്" : "Savings / Passbook"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -335,12 +299,12 @@ const Navbar = () => {
                           isActive("/loans") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💰 Loans
+                        💰 {t("navLoans")}
                       </Link>
                     </li>
                     <li className="nav-item">
                       <Link to="/jobs" className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/jobs") ? "active-role-nav" : "text-dark"}`}>
-                        💼 Community Jobs
+                        💼 {isMl ? "സാമൂഹിക ജോലികൾ" : "Community Jobs"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -352,7 +316,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📢 Notices
+                        📢 {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
                       </Link>
                     </li>
                   </>
@@ -363,7 +327,7 @@ const Navbar = () => {
                   <>
                     {isBankOfficer && <li className="nav-item">
                       <Link to="/loans" className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/loans") ? "active-role-nav" : "text-dark"}`}>
-                        🏦 {i18n.resolvedLanguage === "ml" || i18n.language === "ml" ? "ഡെമോ ബാങ്ക് പരിശോധന" : "Demo Bank Review"}
+                        🏦 {isMl ? "ഡെമോ ബാങ്ക് പരിശോധന" : "Demo Bank Review"}
                       </Link>
                     </li>}
                     {isAdsOfficer && <li className="nav-item">
@@ -371,7 +335,7 @@ const Navbar = () => {
                         to="/ads"
                         className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/ads") ? "active-role-nav" : "text-dark"}`}
                       >
-                        🏛️ ADS Loan Desk
+                        🏛️ {isMl ? "എ.ഡി.എസ് വായ്പ വിഭാഗം" : "ADS Loan Desk"}
                       </Link>
                     </li>}
                     {isCdsOfficer && <li className="nav-item">
@@ -379,7 +343,7 @@ const Navbar = () => {
                         to="/loans"
                         className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/loans") ? "active-role-nav" : "text-dark"}`}
                       >
-                        🏦 CDS Loan Review
+                        🏦 {isMl ? "സി.ഡി.എസ് വായ്പ പരിശോധന" : "CDS Loan Review"}
                       </Link>
                     </li>}
                     <li className="nav-item">
@@ -387,7 +351,7 @@ const Navbar = () => {
                         to="/circulars"
                         className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/circulars") ? "active-role-nav" : "text-dark"}`}
                       >
-                        📢 Notices
+                        📢 {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
                       </Link>
                     </li>
                   </>
@@ -405,7 +369,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📱 Scan QR Attendance
+                        📱 {isMl ? "ക്യു.ആർ ഹാജർ രേഖപ്പെടുത്തുക" : "Scan QR Attendance"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -415,7 +379,7 @@ const Navbar = () => {
                           isActive("/thrift") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💳 My Passbook
+                        💳 {isMl ? "എന്റെ പാസ്ബുക്ക്" : "My Passbook"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -425,12 +389,12 @@ const Navbar = () => {
                           isActive("/loans") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💰 My Loans
+                        💰 {isMl ? "എന്റെ വായ്പകൾ" : "My Loans"}
                       </Link>
                     </li>
                     <li className="nav-item">
                       <Link to="/jobs" className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/jobs") ? "active-role-nav" : "text-dark"}`}>
-                        💼 My Jobs
+                        💼 {isMl ? "എന്റെ ജോലികൾ" : "My Jobs"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -442,27 +406,23 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📢 Notices
+                        📢 {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
                       </Link>
                     </li>
                   </>
                 )}
+                {user && <li className="nav-item">
+                  <Link to="/community-hub" className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/community-hub") ? "active-role-nav" : "text-dark"}`}>
+                    🌱 {isMl ? "കമ്മ്യൂണിറ്റി ഹബ്" : "Community Hub"}
+                  </Link>
+                </li>}
               </ul>
 
               {/* Right Profile & Logout */}
-              <div className="d-flex align-items-center gap-2 mt-2 mt-lg-0">
-                {isMember && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-success rounded-pill px-3 py-1"
-                    onClick={() => setShowQrModal(true)}
-                  >
-                    📱 My QR ID
-                  </button>
-                )}
-
+              <div className="d-flex align-items-center gap-2 mt-2 mt-lg-0 kc-profile-actions">
+                <LanguageSwitcher />
                 <div
-                  className="px-3 py-1 rounded-pill small border"
+                  className="px-3 py-1 rounded-pill small border kc-profile-pill"
                   style={{
                     backgroundColor: isMainAdmin
                       ? "#f1f5f9"
@@ -478,15 +438,15 @@ const Navbar = () => {
                     fontWeight: 600,
                   }}
                 >
-                  {isMainAdmin ? "🛡️ Main Admin" : isSecretary ? `👑 ${user.nhgName || "Secretary"}` : `👤 ${user.name}`}
+                  {isMainAdmin ? (isMl ? "🛡️ പ്രധാന അഡ്മിൻ" : "🛡️ Main Admin") : isSecretary ? `👑 ${user.nhgName || (isMl ? "സെക്രട്ടറി" : "Secretary")}` : `👤 ${user.name}`}
                 </div>
 
                 <button
                   type="button"
-                  className="btn btn-sm btn-outline-danger rounded-pill px-3 py-1"
+                  className="btn btn-sm rounded-pill px-3 py-1 kc-logout-btn"
                   onClick={handleLogout}
                 >
-                  Logout
+                  ↪ {t("logout")}
                 </button>
               </div>
             </>
@@ -494,68 +454,14 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* MEMBER QR MODAL */}
-      {showQrModal && user && (
-        <div className="custom-modal-backdrop" style={{ zIndex: 1100 }}>
-          <div
-            className="custom-modal-card text-center"
-            style={{ maxWidth: "400px" }}
-          >
-            <div className="custom-modal-header bg-success text-white py-2 px-3 d-flex justify-content-between align-items-center">
-              <h6 className="mb-0 text-white fw-bold">
-                📱 My Attendance QR Card
-              </h6>
-              <button
-                type="button"
-                className="btn-close btn-close-white"
-                onClick={() => setShowQrModal(false)}
-              ></button>
-            </div>
-            <div className="p-4 bg-white">
-              <div
-                className="p-3 rounded-3 mb-3 bg-light"
-                style={{ border: "2px dashed #059669" }}
-              >
-                <QRCodeCanvas
-                  value={user.memberId || user.qrCode || "KC00001"}
-                  size={180}
-                  level="H"
-                />
-                <div className="mt-3">
-                  <h6 className="fw-bold mb-0 text-dark">{user.name}</h6>
-                  <span className="badge bg-dark font-monospace my-1">
-                    ID: {user.memberId || user.qrCode || "KC00001"}
-                  </span>
-                  <small className="text-muted d-block">
-                    {user.nhgName || "Kudumbashree NHG"}
-                  </small>
-                </div>
-              </div>
-              <p className="small text-muted mb-0">
-                Show this QR card or scan the Secretary's Meeting QR during roll-call.
-              </p>
-            </div>
-            <div className="p-3 bg-light text-end">
-              <button
-                type="button"
-                className="btn btn-sm btn-secondary"
-                onClick={() => setShowQrModal(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <style>{`
         .active-role-nav {
-          background-color: #ecfdf5 !important;
-          color: #0f766e !important;
+          background-color: #e3f1f3 !important;
+          color: #1a5965 !important;
         }
         .active-public-nav {
-          background-color: #d1fae5 !important;
-          color: #065f46 !important;
+          background-color: #e3f1f3 !important;
+          color: #1a5965 !important;
         }
         .hover-white:hover {
           color: #ffffff !important;

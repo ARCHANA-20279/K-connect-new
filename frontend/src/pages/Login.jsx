@@ -7,6 +7,14 @@ import LanguageSwitcher from "../components/LanguageSwitcher";
 import { speakMemberWelcome } from "../utils/welcomeSpeech";
 import "../Login.css";
 
+const FormIcon = ({ name }) => {
+  const common = { width: 19, height: 19, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
+  if (name === "key") return <svg {...common}><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8 2 2-2 2 2 2-3 3-2-2-2 2"/></svg>;
+  if (name === "info") return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>;
+  if (name === "code") return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m8 10-2 2 2 2m8-4 2 2-2 2m-3-5-2 6"/></svg>;
+  return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>;
+};
+
 const Login = ({ accountType = "" }) => {
   const { t, i18n } = useTranslation();
   const isMl = i18n.language === "ml";
@@ -21,6 +29,11 @@ const Login = ({ accountType = "" }) => {
   // Forgot Password modal state
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotStage, setForgotStage] = useState("email");
+  const [resetCode, setResetCode] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [confirmResetPassword, setConfirmResetPassword] = useState("");
+  const [resetComplete, setResetComplete] = useState(false);
   const [forgotMessage, setForgotMessage] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
   const [showDemoCredentials, setShowDemoCredentials] = useState(false);
@@ -71,13 +84,40 @@ const Login = ({ accountType = "" }) => {
     try {
       const res = await api.post("/auth/forgot-password", { email: forgotEmail });
       setForgotMessage(res.data?.message || (isMl ? "നിർദ്ദേശങ്ങൾ അയച്ചു" : "Password reset instructions dispatched"));
+      setForgotStage("code");
     } catch (err) {
-      setForgotMessage(
-        err.response?.data?.message ||
-        (isMl
+      const responseMessage = err.response?.data?.message || "";
+      const emailIsNotConfigured = responseMessage.toLowerCase().includes("email is not configured");
+      setForgotMessage(emailIsNotConfigured
+        ? (isMl
+          ? "ഈ പ്രോജക്റ്റിൽ ഇമെയിൽ അയയ്ക്കൽ ഇതുവരെ സജ്ജമാക്കിയിട്ടില്ല. അഡ്മിൻ backend/.env-ൽ RESEND_API_KEY, EMAIL_FROM എന്നിവ ചേർത്ത് ബാക്കെൻഡ് വീണ്ടും ആരംഭിക്കണം. കോഡ് അയച്ചിട്ടില്ല."
+          : "Email sending is not set up for this project yet. The admin must add RESEND_API_KEY and EMAIL_FROM to backend/.env, then restart the backend. No code was sent.")
+        : responseMessage || (isMl
           ? "പാസ്‌വേഡ് മാറ്റാൻ നിങ്ങളുടെ NHG സെക്രട്ടറിയെ സമീപിക്കുക."
-          : "Please contact your NHG Secretary to reset credentials.")
-      );
+          : "Please contact your NHG Secretary to reset credentials."));
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetWithCodeSubmit = async (e) => {
+    e.preventDefault();
+    setForgotMessage("");
+    if (resetPassword !== confirmResetPassword) {
+      setForgotMessage(isMl ? "രണ്ട് പാസ്‌വേഡുകളും ഒരുപോലെയായിരിക്കണം." : "The passwords do not match.");
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const res = await api.post("/auth/reset-password/code", {
+        email: forgotEmail,
+        code: resetCode,
+        password: resetPassword,
+      });
+      setForgotMessage(res.data?.message || (isMl ? "പാസ്‌വേഡ് മാറ്റി." : "Your password has been changed."));
+      setResetComplete(true);
+    } catch (err) {
+      setForgotMessage(err.response?.data?.message || (isMl ? "കോഡ് പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക." : "Could not reset the password. Check the code and try again."));
     } finally {
       setForgotLoading(false);
     }
@@ -145,7 +185,7 @@ const Login = ({ accountType = "" }) => {
                 {t("email")}
               </label>
               <div className="kc-field-wrapper">
-                <span className="kc-field-icon">✉️</span>
+                <span className="kc-field-icon"><FormIcon name="mail" /></span>
                 <input
                   id="kc-email"
                   type="email"
@@ -224,6 +264,12 @@ const Login = ({ accountType = "" }) => {
             </Link>
           </div>
 
+          <div className="text-center mt-3 small">
+            <Link to="/about" className="text-decoration-none fw-semibold">
+              {isMl ? "കെ-കണക്ടിനെക്കുറിച്ച് അറിയുക →" : "New to K-Connect? See how it works →"}
+            </Link>
+          </div>
+
           <div className="d-flex justify-content-center gap-3 flex-wrap mt-3 small">
             {accountType !== "member" && <Link to="/member-login">Member sign in</Link>}
             {accountType !== "secretary" && <Link to="/secretary-login">Secretary sign in</Link>}
@@ -285,7 +331,7 @@ const Login = ({ accountType = "" }) => {
         <div className="kc-modal-backdrop" role="dialog" aria-modal="true">
           <div className="kc-modal-box">
             <div className="kc-modal-header">
-              <div className="kc-modal-icon-wrap">🔑</div>
+              <div className="kc-modal-icon-wrap"><FormIcon name="key" /></div>
               <div>
                 <h3 className="kc-modal-title">
                   {isMl ? "പാസ്‌വേഡ് വീണ്ടെടുക്കുക" : "Forgot Password"}
@@ -299,7 +345,7 @@ const Login = ({ accountType = "" }) => {
               <button
                 type="button"
                 className="kc-modal-close"
-                onClick={() => setShowForgotModal(false)}
+                onClick={() => { setShowForgotModal(false); setForgotStage("email"); setForgotMessage(""); setResetComplete(false); }}
                 aria-label="Close"
               >
                 ✕
@@ -309,22 +355,22 @@ const Login = ({ accountType = "" }) => {
             <div className="kc-modal-body">
               {forgotMessage ? (
                 <div className="kc-modal-alert">
-                  <span className="kc-alert-icon">ℹ️</span>
+                  <span className="kc-alert-icon"><FormIcon name="info" /></span>
                   <span>{forgotMessage}</span>
                 </div>
               ) : (
                 <p className="kc-modal-info">
                   {isMl
-                    ? "നിങ്ങളുടെ പാസ്‌വേഡ് സുരക്ഷിതമായി പുനഃക്രമീകരിക്കാനുള്ള വിവരങ്ങൾ അയയ്ക്കും. നിങ്ങൾക്ക് NHG സെക്രട്ടറിയുമായും ബന്ധപ്പെടാവുന്നതാണ്."
-                    : "Instructions to securely reset your credentials will be dispatched. You can also contact your NHG Secretary to verify your identity."}
+                    ? "രജിസ്റ്റർ ചെയ്ത ഇമെയിലിലേക്ക് 10 മിനിറ്റിനുള്ളിൽ ഉപയോഗിക്കേണ്ട ഒറ്റത്തവണ കോഡ് അയക്കും."
+                    : "A one-time code will be sent to your registered email. It expires in 10 minutes."}
                 </p>
               )}
 
-              <form onSubmit={handleForgotPasswordSubmit}>
+              {forgotStage === "email" ? <form onSubmit={handleForgotPasswordSubmit}>
                 <div className="kc-field-group">
                   <label className="kc-field-label">{t("email")}</label>
                   <div className="kc-field-wrapper">
-                    <span className="kc-field-icon">✉️</span>
+                    <span className="kc-field-icon"><FormIcon name="mail" /></span>
                     <input
                       type="email"
                       className="kc-field-input"
@@ -347,7 +393,7 @@ const Login = ({ accountType = "" }) => {
                   <button
                     type="submit"
                     className="kc-btn-primary"
-                    disabled={forgotLoading}
+                    disabled={forgotLoading || forgotMessage.toLowerCase().includes("not set up") || forgotMessage.includes("സജ്ജമാക്കിയിട്ടില്ല")}
                   >
                     {forgotLoading ? (
                       t("loading")
@@ -356,7 +402,27 @@ const Login = ({ accountType = "" }) => {
                     )}
                   </button>
                 </div>
-              </form>
+              </form> : resetComplete ? <div className="kc-modal-actions"><button type="button" className="kc-btn-primary" onClick={() => { setShowForgotModal(false); setForgotStage("email"); setForgotMessage(""); setResetComplete(false); }}>{isMl ? "ലോഗിനിലേക്ക് മടങ്ങുക" : "Back to sign in"}</button></div> : <form onSubmit={handleResetWithCodeSubmit}>
+                <div className="kc-field-group mb-3">
+                  <label className="kc-field-label" htmlFor="forgot-reset-code">{isMl ? "ഇമെയിലിൽ ലഭിച്ച 6 അക്ക കോഡ്" : "6-digit code from your email"}</label>
+                  <div className="kc-field-wrapper">
+                    <span className="kc-field-icon"><FormIcon name="code" /></span>
+                    <input id="forgot-reset-code" className="kc-field-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={resetCode} onChange={(e) => setResetCode(e.target.value.replace(/\D/g, "").slice(0, 6))} required />
+                  </div>
+                </div>
+                <div className="kc-field-group mb-3">
+                  <label className="kc-field-label" htmlFor="forgot-new-password">{isMl ? "പുതിയ പാസ്‌വേഡ് (കുറഞ്ഞത് 8 അക്ഷരം)" : "New password (at least 8 characters)"}</label>
+                  <input id="forgot-new-password" className="kc-field-input" type="password" autoComplete="new-password" minLength={8} value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} required />
+                </div>
+                <div className="kc-field-group mb-3">
+                  <label className="kc-field-label" htmlFor="forgot-confirm-password">{isMl ? "പുതിയ പാസ്‌വേഡ് വീണ്ടും നൽകുക" : "Confirm new password"}</label>
+                  <input id="forgot-confirm-password" className="kc-field-input" type="password" autoComplete="new-password" minLength={8} value={confirmResetPassword} onChange={(e) => setConfirmResetPassword(e.target.value)} required />
+                </div>
+                <div className="kc-modal-actions">
+                  <button type="button" className="kc-btn-secondary" onClick={() => { setForgotStage("email"); setForgotMessage(""); }}>{isMl ? "മടങ്ങുക" : "Back"}</button>
+                  <button type="submit" className="kc-btn-primary" disabled={forgotLoading}>{forgotLoading ? t("loading") : (isMl ? "പാസ്‌വേഡ് മാറ്റുക" : "Set new password")}</button>
+                </div>
+              </form>}
             </div>
           </div>
         </div>

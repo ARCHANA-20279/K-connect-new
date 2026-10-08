@@ -39,7 +39,7 @@ const loanSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["Pending", "ADS Review", "CDS Review", "Bank Review", "Bank Approved", "Repayment", "Approved", "Rejected", "Completed"],
+      enum: ["NHG Voting", "Pending", "ADS Review", "CDS Review", "Bank Review", "Bank Approved", "Repayment", "Approved", "Rejected", "Completed"],
       default: "Pending",
     },
 
@@ -49,6 +49,18 @@ const loanSchema = new mongoose.Schema(
       remarks: { type: String, trim: true, default: "" },
       reviewedBy: { type: String, trim: true, default: "" },
       reviewedAt: { type: Date },
+    },
+
+    peerApproval: {
+      eligibleVoterIds: { type: [String], default: [] },
+      votes: [{
+        memberId: { type: String, required: true },
+        memberName: { type: String, default: "" },
+        decision: { type: String, enum: ["Approve", "Reject"], required: true },
+        votedAt: { type: Date, default: Date.now },
+      }],
+      requiredApprovals: { type: Number, default: 0 },
+      completedAt: { type: Date },
     },
 
     workflowHistory: [{

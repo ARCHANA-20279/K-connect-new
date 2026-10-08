@@ -1,6 +1,5 @@
 import { useState } from "react";
 import api from "../api";
-import { QRCodeCanvas } from "qrcode.react";
 import "./MemberRegister.css";
 
 const MemberRegister = () => {
@@ -71,20 +70,6 @@ const MemberRegister = () => {
     {message}
     <br />
     <strong>Member ID: {memberId}</strong>
-
-    <div style={{ marginTop: "20px" }}>
-      <h4>Member QR Code</h4>
-
-      <QRCodeCanvas
-        value={memberId}
-        size={200}
-        level="H"
-      />
-
-      <p style={{ marginTop: "10px" }}>
-        Scan this QR code for attendance.
-      </p>
-    </div>
   </div>
 )}
         {error && (

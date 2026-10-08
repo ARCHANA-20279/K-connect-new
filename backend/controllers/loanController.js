@@ -3,6 +3,7 @@ const NHG = require("../models/NHG");
 const Member = require("../models/Member");
 const Notification = require("../models/Notification");
 const Thrift = require("../models/Thrift");
+const { calculateCreditScore } = require("../services/creditScoreService");
 
 const roleOf = (user) => (user?.role || "").toLowerCase();
 const isMainAdmin = (role) => ["main_admin", "super_admin", "superadmin"].includes((role || "").toLowerCase());
@@ -51,8 +52,15 @@ const createLoan = async (req, res) => {
       return res.status(400).json({ message: "Loan type, purpose, and a valid amount are required." });
     }
     const thriftTotal = await getRecordedThriftTotal(member.memberId);
-    if (Number(amount) > thriftTotal) {
-      return res.status(400).json({ message: thriftLimitMessage(amount, thriftTotal), thriftTotal });
+    const creditScore = await calculateCreditScore(member.memberId);
+    const maximumLoanAmount = Math.floor(thriftTotal * creditScore.loanLimitMultiplier);
+    if (Number(amount) > maximumLoanAmount) {
+      return res.status(400).json({
+        message: `Your current ${creditScore.tier} trust score allows a loan up to ₹${maximumLoanAmount.toLocaleString("en-IN")}. This limit remains within your recorded thrift of ₹${thriftTotal.toLocaleString("en-IN")}.`,
+        thriftTotal,
+        maximumLoanAmount,
+        creditScore,
+      });
     }
     const nhgName = member.nhgName || req.user.nhgName || "";
     let nhgId = member.nhgId || req.user.nhgId || "";
@@ -60,6 +68,10 @@ const createLoan = async (req, res) => {
       const foundNhg = await NHG.findOne({ name: nhgName });
       nhgId = foundNhg?.nhgId || "";
     }
+    const groupFilter = nhgId ? { nhgId } : { nhgName };
+    const voters = await Member.find({ ...groupFilter, status: "Active", memberId: { $ne: member.memberId } }).select("memberId name");
+    const requiredApprovals = Math.floor(voters.length / 2) + 1;
+    if (voters.length === 0) return res.status(400).json({ message: "At least one other active NHG member is required for peer approval." });
     const loanCount = await Loan.countDocuments({});
     const loanId = `LN-${String(loanCount + 1001)}`;
     const loan = await Loan.create({
@@ -68,16 +80,98 @@ const createLoan = async (req, res) => {
       loanType: loanType.trim(),
       amount: Number(amount),
       purpose: purpose.trim(),
-      status: "Pending",
+      status: "NHG Voting",
       loanId,
       nhgName,
       nhgId,
+      peerApproval: { eligibleVoterIds: voters.map((voter) => voter.memberId), requiredApprovals, votes: [] },
       workflowHistory: [{ stage: "Member", decision: "Application submitted", actor: member.name, actorRole: "member", at: new Date() }],
     });
-    res.status(201).json({ message: "Loan application submitted for NHG Secretary review.", loan });
+    try {
+      await Notification.insertMany(voters.map((voter) => ({
+        title: `NHG loan vote requested: ${member.name}`,
+        message: `${member.name} has requested ₹${Number(amount).toLocaleString("en-IN")} (${loan.loanId}). Review the request and cast your NHG vote.`,
+        type: "LOAN",
+        recipientRole: "member",
+        recipientMemberId: voter.memberId,
+        targetAudience: "NHG Peer Loan Vote",
+        category: "NHG Loan Vote",
+        createdBy: member.name,
+        nhgName,
+        nhgId,
+        relatedLoan: loan._id,
+      })));
+    } catch (notificationError) {
+      console.warn("Could not create NHG peer vote notifications:", notificationError.message);
+    }
+    req.app.get("io")?.to(`nhg:${nhgId || nhgName}`).emit("loan:vote-request", { loanId: loan._id, loanCode: loan.loanId, memberName: member.name, amount: loan.amount, purpose: loan.purpose });
+    res.status(201).json({ message: "Loan request sent to NHG members for peer approval.", loan, creditScore, maximumLoanAmount });
   } catch (error) {
     console.error("Create loan error:", error);
     res.status(500).json({ message: "Failed to create loan application", error: error.message });
+  }
+};
+
+const getMyCreditScore = async (req, res) => {
+  try {
+    const member = await Member.findOne({ memberId: req.user.memberId, status: "Active" });
+    if (!member) return res.status(404).json({ message: "Your active member profile could not be found." });
+    const creditScore = await calculateCreditScore(member.memberId);
+    const thriftTotal = await getRecordedThriftTotal(member.memberId);
+    res.json({ creditScore, thriftTotal, maximumLoanAmount: Math.floor(thriftTotal * creditScore.loanLimitMultiplier) });
+  } catch (error) {
+    console.error("Credit score calculation error:", error);
+    res.status(500).json({ message: "Could not calculate your trust score." });
+  }
+};
+
+const castPeerVote = async (req, res) => {
+  try {
+    const member = await Member.findOne({ memberId: req.user.memberId, status: "Active" });
+    if (!member) return res.status(403).json({ message: "An active NHG member profile is required to vote." });
+    const decision = req.body.decision;
+    if (!["Approve", "Reject"].includes(decision)) return res.status(400).json({ message: "Choose approve or reject." });
+    const loan = await Loan.findById(req.params.id);
+    if (!loan) return res.status(404).json({ message: "Loan not found." });
+    if (loan.status !== "NHG Voting") return res.status(400).json({ message: "This loan is no longer accepting NHG votes." });
+    if (loan.memberId === member.memberId) return res.status(403).json({ message: "You cannot vote on your own loan request." });
+    if (!loan.peerApproval.eligibleVoterIds.includes(member.memberId)) return res.status(403).json({ message: "You are not in this request's NHG voter group." });
+    const recorded = await Loan.findOneAndUpdate(
+      { _id: loan._id, status: "NHG Voting", "peerApproval.eligibleVoterIds": member.memberId, "peerApproval.votes.memberId": { $ne: member.memberId } },
+      { $push: { "peerApproval.votes": { memberId: member.memberId, memberName: member.name, decision, votedAt: new Date() } } },
+      { new: true, projection: { _id: 1 } }
+    );
+    if (!recorded) return res.status(409).json({ message: "Your vote has already been recorded or voting has closed." });
+    const updated = await Loan.findById(loan._id);
+    const approvals = updated.peerApproval.votes.filter((vote) => vote.decision === "Approve").length;
+    const rejections = updated.peerApproval.votes.filter((vote) => vote.decision === "Reject").length;
+    const allVoted = updated.peerApproval.votes.length >= updated.peerApproval.eligibleVoterIds.length;
+    let finalized = false;
+    if (approvals >= updated.peerApproval.requiredApprovals) {
+      const result = await Loan.updateOne(
+        { _id: updated._id, status: "NHG Voting" },
+        {
+          $set: { status: "Pending", "peerApproval.completedAt": new Date() },
+          $push: { workflowHistory: { stage: "NHG Peer Vote", decision: "Majority approved; sent to NHG Secretary", actor: req.user?.name || "", actorRole: roleOf(req.user), reference: "", remarks: `${approvals}/${updated.peerApproval.eligibleVoterIds.length} approvals`, at: new Date() } },
+        }
+      );
+      finalized = result.modifiedCount > 0;
+    } else if (allVoted) {
+      const result = await Loan.updateOne(
+        { _id: updated._id, status: "NHG Voting" },
+        {
+          $set: { status: "Rejected", rejectionReason: "NHG peer vote did not reach majority approval.", "peerApproval.completedAt": new Date() },
+          $push: { workflowHistory: { stage: "NHG Peer Vote", decision: "Rejected; majority not reached", actor: req.user?.name || "", actorRole: roleOf(req.user), reference: "", remarks: `${approvals} approvals, ${rejections} rejections`, at: new Date() } },
+        }
+      );
+      finalized = result.modifiedCount > 0;
+    }
+    const current = finalized ? await Loan.findById(updated._id) : updated;
+    req.app.get("io")?.to(`nhg:${current.nhgId || current.nhgName}`).emit("loan:vote-update", { loanId: current._id, status: current.status, approvals, rejections, requiredApprovals: current.peerApproval.requiredApprovals, totalVoters: current.peerApproval.eligibleVoterIds.length });
+    res.json({ message: "Your NHG vote has been recorded.", loan: current });
+  } catch (error) {
+    console.error("Peer loan vote error:", error);
+    res.status(500).json({ message: "Failed to record NHG vote.", error: error.message });
   }
 };
 
@@ -91,7 +185,15 @@ const getAllLoans = async (req, res) => {
       if (!filter) return res.status(403).json({ message: "Your account is not linked to an NHG." });
       query = filter;
     } else if (role === "member") {
-      query.memberId = user.memberId || "__unlinked_member__";
+      const group = [];
+      let member = user.memberId ? await Member.findOne({ memberId: user.memberId, status: "Active" }) : null;
+      if (!member) member = await Member.findOne({ email: (user.email || "").toLowerCase(), status: "Active" });
+      if (member?.nhgId) group.push({ nhgId: member.nhgId });
+      if (member?.nhgName) group.push({ nhgName: member.nhgName });
+      query = { $or: [
+        { memberId: user.memberId || "__unlinked_member__" },
+        ...(group.length ? [{ status: "NHG Voting", peerApproval: { $exists: true }, $or: group }] : []),
+      ] };
     } else if (isCds(role)) {
       // CDS reviews applications forwarded from ADS across all constituent NHGs.
       query = {};
@@ -366,6 +468,9 @@ const verifyRepayment = async (req, res) => {
     }
     addHistory(loan, req.user, "Repayment verification", repayment.status, repayment.receiptReference, repayment.remarks);
     await loan.save();
+    if (repayment.status === "Verified") {
+      await calculateCreditScore(loan.memberId).catch((scoreError) => console.warn("Could not refresh member credit score:", scoreError.message));
+    }
     res.json({ message: `EMI payment ${repayment.status.toLowerCase()}.`, loan });
   } catch (error) {
     res.status(500).json({ message: "Failed to verify EMI payment", error: error.message });
@@ -374,6 +479,8 @@ const verifyRepayment = async (req, res) => {
 
 module.exports = {
   createLoan,
+  getMyCreditScore,
+  castPeerVote,
   getAllLoans,
   getLoanById,
   secretaryReview,

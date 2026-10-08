@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="82" viewBox="0 0 360 82" role="img" aria-labelledby="title desc">
+  <title id="title">K-Connect</title>
+  <desc id="desc">Kudumbashree neighbourhood group platform</desc>
+  <g fill="none" stroke="#137a65" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M36 57c1-16 2-25 1-35M37 43C24 42 18 35 17 25c11 0 19 6 21 17M38 37c3-13 11-20 22-21 0 11-7 20-21 24M37 51c-9-8-18-9-27-5 5 10 14 14 27 12M38 51c8-9 18-11 28-7-4 11-14 16-28 15" stroke-width="3.5"/>
+  </g>
+  <circle cx="37" cy="20" r="4" fill="#dfaa54"/>
+  <path d="M20 64c9-7 25-10 39-4l7 6H15z" fill="#7ba75f"/>
+  <text x="82" y="41" fill="#137a65" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="700" letter-spacing="-.8">K-Connect</text>
+  <text x="84" y="63" fill="#66716c" font-family="Arial, Helvetica, sans-serif" font-size="13" letter-spacing=".1">Kudumbashree NHG Platform</text>
+</svg>

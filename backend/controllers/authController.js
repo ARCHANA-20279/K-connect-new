@@ -1,5 +1,11 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const crypto = require("crypto");
+
+const hashResetCode = (code) => crypto
+  .createHmac("sha256", process.env.JWT_SECRET || "kconnect_secret")
+  .update(String(code))
+  .digest("hex");
 
 const createDemoBankOfficer = async (req, res) => {
   try {
@@ -291,27 +297,113 @@ const loginUser = async (req, res) => {
 // @route POST /api/auth/forgot-password
 const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email) {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ message: "Please provide your registered email address" });
     }
-
-    const cleanEmail = email.toLowerCase().trim();
-    const user = await User.findOne({ email: cleanEmail });
-
-    if (!user) {
-      // Return safe message without exposing account existence
-      return res.status(200).json({
-        message: "If an account exists with this email, password reset instructions have been dispatched. You can also contact your NHG Secretary for identity verification.",
-      });
+    if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
+      return res.status(503).json({ message: "Password reset email is not configured. Please ask the site administrator to configure the email service." });
     }
-
+    const user = await User.findOne({ email }).select("+passwordResetCodeHash +passwordResetCodeExpires +passwordResetCodeAttempts +passwordResetTokenHash +passwordResetExpires");
+    if (user) {
+      const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
+      user.passwordResetCodeHash = hashResetCode(code);
+      user.passwordResetCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
+      user.passwordResetCodeAttempts = 0;
+      user.passwordResetTokenHash = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save();
+      const displayName = String(user.name || "member");
+      const safeName = displayName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      const mailResponse = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: process.env.EMAIL_FROM,
+          to: [email],
+          subject: "Your K-Connect password reset code",
+          text: `Hello ${displayName},\n\nYour K-Connect password reset code is ${code}. It expires in 10 minutes and can be used once.\n\nIf you did not request this, ignore this email.`,
+          html: `<p>Hello ${safeName},</p><p>Your K-Connect password reset code is:</p><p style="font-size:28px;font-weight:bold;letter-spacing:8px">${code}</p><p>This code expires in 10 minutes and can be used once.</p><p>If you did not request this, ignore this email.</p>`,
+        }),
+      });
+      if (!mailResponse.ok) {
+        user.passwordResetCodeHash = undefined;
+        user.passwordResetCodeExpires = undefined;
+        user.passwordResetCodeAttempts = 0;
+        await user.save();
+        console.error("Password reset email provider returned an error:", await mailResponse.text());
+        return res.status(502).json({ message: "The reset email could not be sent. Please try again later or contact your NHG Secretary." });
+      }
+    }
     return res.status(200).json({
-      message: `Password reset request submitted for ${cleanEmail}. Please check your inbox or contact your NHG Secretary to reset credentials.`,
+      message: "If an account exists with this email, a reset code has been sent. It expires in 10 minutes.",
     });
   } catch (error) {
     console.error("Forgot password error:", error);
-    res.status(500).json({ message: "Password reset request failed", error: error.message });
+    res.status(500).json({ message: "Password reset request failed. Please try again later." });
+  }
+};
+
+const resetPasswordWithCode = async (req, res) => {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const code = String(req.body.code || "").trim();
+    const password = String(req.body.password || "");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ message: "Enter the registered email and the 6-digit reset code." });
+    }
+    if (password.length < 8) return res.status(400).json({ message: "Choose a password with at least 8 characters." });
+
+    const user = await User.findOne({ email }).select("+passwordResetCodeHash +passwordResetCodeExpires +passwordResetCodeAttempts +passwordResetTokenHash +passwordResetExpires");
+    const expired = !user?.passwordResetCodeExpires || user.passwordResetCodeExpires <= new Date();
+    if (!user || expired || !user.passwordResetCodeHash || user.passwordResetCodeAttempts >= 5) {
+      return res.status(400).json({ message: "The code is invalid or expired. Request a new code." });
+    }
+
+    const suppliedHash = Buffer.from(hashResetCode(code), "hex");
+    const storedHash = Buffer.from(user.passwordResetCodeHash, "hex");
+    const matches = suppliedHash.length === storedHash.length && crypto.timingSafeEqual(suppliedHash, storedHash);
+    if (!matches) {
+      user.passwordResetCodeAttempts += 1;
+      if (user.passwordResetCodeAttempts >= 5) {
+        user.passwordResetCodeHash = undefined;
+        user.passwordResetCodeExpires = undefined;
+      }
+      await user.save();
+      return res.status(400).json({ message: "The code is invalid or expired. Request a new code." });
+    }
+
+    user.password = password;
+    user.passwordResetCodeHash = undefined;
+    user.passwordResetCodeExpires = undefined;
+    user.passwordResetCodeAttempts = 0;
+    user.passwordResetTokenHash = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+    return res.json({ message: "Your password has been changed. You can now sign in." });
+  } catch (error) {
+    console.error("Password reset code error:", error);
+    return res.status(500).json({ message: "Password could not be changed. Request a new reset code." });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const password = String(req.body.password || "");
+    if (!/^[a-f0-9]{64}$/i.test(token || "")) return res.status(400).json({ message: "This reset link is invalid or expired. Request a new one." });
+    if (password.length < 8) return res.status(400).json({ message: "Choose a password with at least 8 characters." });
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const user = await User.findOne({ passwordResetTokenHash: tokenHash, passwordResetExpires: { $gt: new Date() } }).select("+passwordResetTokenHash +passwordResetExpires");
+    if (!user) return res.status(400).json({ message: "This reset link is invalid or expired. Request a new one." });
+    user.password = password;
+    user.passwordResetTokenHash = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+    return res.json({ message: "Your password has been changed. You can now sign in." });
+  } catch (error) {
+    console.error("Password reset error:", error);
+    return res.status(500).json({ message: "Password could not be changed. Please request a new reset link." });
   }
 };
 
@@ -320,4 +412,4 @@ const getProfile = async (req, res) => {
   res.json(req.user);
 };
 
-module.exports = { registerUser, loginUser, getProfile, forgotPassword, createDemoBankOfficer };
+module.exports = { registerUser, loginUser, getProfile, forgotPassword, resetPassword, resetPasswordWithCode, createDemoBankOfficer };

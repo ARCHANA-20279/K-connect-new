@@ -1,6 +1,7 @@
 const Attendance = require("../models/Attendance");
 const Member = require("../models/Member");
 const Meeting = require("../models/Meeting");
+const { calculateCreditScore } = require("../services/creditScoreService");
 const { randomBytes } = require("crypto");
 
 const createAttendanceToken = () => `KCMTG-${randomBytes(32).toString("hex")}`;
@@ -154,6 +155,7 @@ const scanMeetingAttendance = async (req, res) => {
       nhgId: meeting.nhgId || member.nhgId || user.nhgId || "",
       nhgName: meeting.nhgName || member.nhgName || user.nhgName || "",
     });
+    await calculateCreditScore(member.memberId).catch((scoreError) => console.warn("Could not refresh member credit score:", scoreError.message));
 
     // 6. Update meeting attendee count
     const totalAttendees = await Attendance.countDocuments({
@@ -407,6 +409,7 @@ const scanAttendance = async (req, res) => {
       date: new Date(),
       status: "Present",
     });
+    await calculateCreditScore(member.memberId).catch((scoreError) => console.warn("Could not refresh member credit score:", scoreError.message));
 
     res.status(201).json({
       alreadyMarked: false,
@@ -552,6 +555,7 @@ const manualMarkAttendance = async (req, res) => {
         date: new Date(),
         status: status || "Present",
       });
+      await calculateCreditScore(member.memberId).catch((scoreError) => console.warn("Could not refresh member credit score:", scoreError.message));
 
       const totalAttendees = await Attendance.countDocuments({
         meetingId: meeting._id,
@@ -594,6 +598,7 @@ const manualMarkAttendance = async (req, res) => {
       date: new Date(),
       status: status || "Present",
     });
+    await calculateCreditScore(member.memberId).catch((scoreError) => console.warn("Could not refresh member credit score:", scoreError.message));
 
     res.status(201).json({
       message: `${member.name}'s attendance marked manually`,

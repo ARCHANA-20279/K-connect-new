@@ -15,7 +15,7 @@ const Register = () => {
     email: "",
     password: "",
     role: "member",
-    nhgName: "Ward 15 Ayalkoottam",
+    nhgName: "",
     nhgId: "",
     phone: "",
   });
@@ -30,12 +30,6 @@ const Register = () => {
         const res = await api.get("/nhgs/public-list");
         if (res.data?.nhgs) {
           setAvailableNHGs(res.data.nhgs);
-          if (res.data.nhgs.length > 0) {
-            setForm((prev) => {
-              const current = res.data.nhgs.find((nhg) => nhg.name === prev.nhgName) || res.data.nhgs[0];
-              return { ...prev, nhgName: current.name, nhgId: current.nhgId || "" };
-            });
-          }
         }
       } catch (e) {
         console.warn("Could not fetch NHGs list:", e);
@@ -50,9 +44,32 @@ const Register = () => {
     e.preventDefault();
     setError("");
     setSuccess(false);
+    const cleanName = form.name.trim();
+    const cleanEmail = form.email.trim().toLowerCase();
+    const cleanPhone = form.phone.replace(/\D/g, "");
+    if (cleanName.length < 2) {
+      setError(isMl ? "ദയവായി സാധുവായ പേര് നൽകുക." : "Enter a name with at least 2 characters.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError(isMl ? "സാധുവായ ഇമെയിൽ വിലാസം നൽകുക." : "Enter a valid email address.");
+      return;
+    }
+    if (form.password.length < 8) {
+      setError(isMl ? "പാസ്‌വേഡിന് കുറഞ്ഞത് 8 അക്ഷരങ്ങൾ വേണം." : "Password must be at least 8 characters.");
+      return;
+    }
+    if (form.phone && cleanPhone.length !== 10) {
+      setError(isMl ? "ഫോൺ നമ്പർ 10 അക്കമായിരിക്കണം." : "Phone number must contain 10 digits.");
+      return;
+    }
+    if (form.role === "member" && !form.nhgId) {
+      setError(isMl ? "അംഗമാകാൻ ഒരു അയൽക്കൂട്ടം തിരഞ്ഞെടുക്കുക." : "Choose an NHG to request membership.");
+      return;
+    }
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/register", form);
+      const { data } = await api.post("/auth/register", { ...form, name: cleanName, email: cleanEmail, phone: cleanPhone });
       if (data.pendingApproval) {
         setSuccess(true);
         return;
@@ -102,7 +119,7 @@ const Register = () => {
             <h6 className="text-white fw-bold mb-2">📋 {isMl ? "അംഗത്വ ആനുകൂല്യങ്ങൾ" : "Member Privileges"}</h6>
             <ul className="list-unstyled mb-0 text-white-50 small d-flex flex-column gap-1">
               <li>✓ {isMl ? "വ്യക്തിഗത ഡിജിറ്റൽ പാസ്ബുക്കും തത്സമയ ബാലൻസും" : "Personal digital thrift passbook & live savings ledger"}</li>
-              <li>✓ {isMl ? "ക്യുആർ കോഡ് അടിസ്ഥാനമാക്കിയുള്ള അതിവേഗ ഹാജർ" : "QR code encoded smart member attendance card"}</li>
+              <li>✓ {isMl ? "മീറ്റിംഗിന്റെ ക്യുആർ കോഡ് സ്കാൻ ചെയ്ത് ഹാജർ രേഖപ്പെടുത്താം" : "Record attendance by scanning the meeting QR code"}</li>
               <li>✓ {isMl ? "സർക്കാർ കൃഷി സബ്‌സിഡികളും പരിശീലനങ്ങളും" : "Access to organic farming JLG subsidies & skill workshops"}</li>
             </ul>
           </div>
@@ -140,27 +157,29 @@ const Register = () => {
             </div>
           ) : (
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} autoComplete="off">
+            <input aria-hidden="true" tabIndex={-1} autoComplete="username" className="position-absolute opacity-0" style={{ width: 1, height: 1, top: -1000 }} />
+            <input aria-hidden="true" tabIndex={-1} type="password" autoComplete="current-password" className="position-absolute opacity-0" style={{ width: 1, height: 1, top: -1000 }} />
             <div className="row g-2 mb-3">
               <div className="col-12">
                 <label className="form-label small fw-semibold text-dark">{t("name")} *</label>
-                <input type="text" name="name" className="form-control" placeholder="e.g. Sujatha Nair" value={form.name} onChange={handleChange} required />
+                <input type="text" name="name" autoComplete="off" minLength={2} maxLength={80} className="form-control" placeholder="e.g. Sujatha Nair" value={form.name} onChange={handleChange} required />
               </div>
             </div>
 
             <div className="mb-3">
               <label className="form-label small fw-semibold text-dark">{t("email")} *</label>
-              <input type="email" name="email" className="form-control" placeholder="name@example.com" value={form.email} onChange={handleChange} required />
+              <input type="email" name="email" autoComplete="off" autoCapitalize="none" className="form-control" placeholder="name@example.com" value={form.email} onChange={handleChange} required />
             </div>
 
             <div className="row g-2 mb-3">
               <div className="col-md-6">
                 <label className="form-label small fw-semibold text-dark">{t("password")} *</label>
-                <input type="password" name="password" className="form-control" placeholder="••••••••" value={form.password} onChange={handleChange} required minLength={6} />
+                <input type="password" name="password" autoComplete="new-password" className="form-control" placeholder={isMl ? "കുറഞ്ഞത് 8 അക്ഷരങ്ങൾ" : "At least 8 characters"} value={form.password} onChange={handleChange} required minLength={8} />
               </div>
               <div className="col-md-6">
                 <label className="form-label small fw-semibold text-dark">{t("phone")}</label>
-                <input type="text" name="phone" className="form-control" placeholder="98XXXXXXXX" value={form.phone} onChange={handleChange} />
+                <input type="tel" name="phone" autoComplete="off" inputMode="numeric" maxLength={10} className="form-control" placeholder="9876543210" value={form.phone} onChange={handleChange} />
               </div>
             </div>
 

@@ -385,3 +385,59 @@
   font-size: 54px;
   margin-bottom: 15px;
 }
+
+/* Palette 02: keep Meeting Management in the shared teal-blue theme. */
+.meeting-page-container {
+  background-color: #f4f7f8;
+}
+.meeting-page-container .meeting-hero {
+  background: linear-gradient(120deg, #203f54 0%, #245f72 52%, #248f9d 100%);
+  box-shadow: 0 10px 25px -5px rgba(36, 95, 114, .24);
+}
+.meeting-page-container .meeting-hero-subtitle { color: #e2f1f3; }
+.meeting-page-container .stat-card-widget,
+.meeting-page-container .meeting-card,
+.meeting-page-container .custom-modal-card,
+.meeting-page-container .meeting-empty-state {
+  border-color: #d8e3e6;
+}
+.meeting-page-container .icon-blue {
+  background: #e3f1f3;
+  color: #247b88;
+}
+.meeting-page-container .icon-emerald {
+  background: #e3f1f3;
+  color: #2a7480;
+}
+.meeting-page-container .filter-pill-btn.active {
+  background: #248f9d;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(36, 143, 157, .22);
+}
+.meeting-page-container .filter-pill-btn:hover:not(.active) {
+  background: #e3f1f3;
+  color: #1a5965;
+}
+.meeting-page-container .meeting-agenda-box {
+  background: #eaf3f5;
+  border-left-color: #248f9d;
+}
+.meeting-page-container .meeting-minutes-preview {
+  background: #e3f1f3;
+  color: #285d66;
+  border-left-color: #2a7480;
+}
+.meeting-page-container .form-control-input:focus {
+  border-color: #248f9d;
+  box-shadow: 0 0 0 3px rgba(36, 143, 157, .16);
+}
+.meeting-page-container .btn-primary-action,
+.meeting-page-container .btn-primary {
+  background-color: #248f9d;
+  border-color: #248f9d;
+}
+.meeting-page-container .btn-primary-action:hover,
+.meeting-page-container .btn-primary:hover {
+  background-color: #1e7180;
+  border-color: #1e7180;
+}

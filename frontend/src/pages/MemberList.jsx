@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
 import api from "../api";
-import { QRCodeCanvas } from "qrcode.react";
 
 const MemberList = () => {
   const { t } = useTranslation();
@@ -166,31 +165,6 @@ const MemberList = () => {
     } catch (err) {
       alert(err.response?.data?.message || "Failed to decline membership request");
     }
-  };
-
-  // =========================
-  // DOWNLOAD QR CODE
-  // =========================
-  const handleDownloadQR = (member) => {
-    const canvas = document.getElementById(
-      `qr-${member._id}`
-    );
-
-    if (!canvas) {
-      alert("QR code not found");
-      return;
-    }
-
-    const pngUrl = canvas.toDataURL("image/png");
-
-    const link = document.createElement("a");
-
-    link.href = pngUrl;
-    link.download = `${member.memberId}-QR.png`;
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   // =========================
@@ -428,7 +402,6 @@ const MemberList = () => {
                 <th>{t("addressLabel")}</th>
                 <th>{t("wardLabel")}</th>
                 <th>{t("status")}</th>
-                <th>{t("qrCodeLabel")}</th>
                 <th>{t("actions")}</th>
               </tr>
             </thead>
@@ -471,17 +444,6 @@ const MemberList = () => {
                     <span className={`badge ${member.status === "Active" ? "bg-success" : member.status === "Pending" ? "bg-warning text-dark" : member.status === "Rejected" ? "bg-danger" : "bg-secondary"}`}>
                       {member.status === "Pending" ? "Awaiting secretary approval" : member.status === "Rejected" ? "Not approved" : member.status === "Active" ? t("active") : t("inactive")}
                     </span>
-                  </td>
-
-                  {/* QR CODE */}
-                  <td className="text-center">
-                    {member.status === "Active" ? <>
-                      <QRCodeCanvas id={`qr-${member._id}`} value={member.memberId} size={140} />
-                      <br />
-                      <button type="button" className="btn btn-outline-success btn-sm mt-2" onClick={() => handleDownloadQR(member)}>
-                        {t("downloadQrBtn")}
-                      </button>
-                    </> : <span className="small text-muted">Available after approval</span>}
                   </td>
 
                   {/* ACTION */}

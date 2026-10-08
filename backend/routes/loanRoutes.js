@@ -1,6 +1,8 @@
 const express = require("express");
 const {
   createLoan,
+  getMyCreditScore,
+  castPeerVote,
   getAllLoans,
   getLoanById,
   secretaryReview,
@@ -16,6 +18,8 @@ const { protect, authorize } = require("../middleware/auth");
 const router = express.Router();
 
 router.post("/", protect, authorize("member"), createLoan);
+router.get("/credit-score/me", protect, authorize("member"), getMyCreditScore);
+router.post("/:id/peer-vote", protect, authorize("member"), castPeerVote);
 router.get("/", protect, getAllLoans);
 router.get("/:id", protect, getLoanById);
 

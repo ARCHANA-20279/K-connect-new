@@ -6,6 +6,7 @@ const LanguageSwitcher = () => {
   const handleLanguageChange = (lang) => {
     i18n.changeLanguage(lang);
     localStorage.setItem("kconnect_language", lang);
+    document.documentElement.lang = lang === "ml" ? "ml-IN" : "en";
   };
 
   const isMalayalam = i18n.language === "ml";

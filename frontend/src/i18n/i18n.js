@@ -104,15 +104,13 @@ const resources = {
       meetingNoticeTitle: "📢 Kudumbashree NHG Meeting Notice",
 
       // Member Registration & Directory
-      membersHeroTitle: "Member Directory & ID Cards",
-      membersHeroSubtitle: "Centralized registry of verified Kudumbashree neighborhood group members with digital QR attendance cards.",
+      membersHeroTitle: "Member Directory",
+      membersHeroSubtitle: "Centralized registry of verified Kudumbashree neighborhood group members.",
       registerMemberBtn: "➕ Register New Member",
       memberIdLabel: "Member ID",
       memberNameLabel: "Member Name",
       addressLabel: "Address",
       wardLabel: "Ward",
-      qrCodeLabel: "Digital QR Code",
-      downloadQrBtn: "📥 Download QR ID",
       deactivateBtn: "Deactivate",
 
       // Attendance Kiosk
@@ -327,15 +325,13 @@ const resources = {
       meetingNoticeTitle: "📢 കുടുംബശ്രീ അയൽക്കൂട്ട യോഗ അറിയിപ്പ്",
 
       // Member Registration & Directory
-      membersHeroTitle: "അംഗങ്ങളുടെ പട്ടികയും ഐഡി കാർഡും",
-      membersHeroSubtitle: "ഡിജിറ്റൽ ക്യുആർ ഹാജർ കാർഡുകളുള്ള അയൽക്കൂട്ട അംഗങ്ങളുടെ ഔദ്യോഗിക ഡയറക്ടറി.",
+      membersHeroTitle: "അംഗങ്ങളുടെ പട്ടിക",
+      membersHeroSubtitle: "കുടുംബശ്രീ അയൽക്കൂട്ടത്തിലെ അംഗങ്ങളുടെ ഔദ്യോഗിക പട്ടിക.",
       registerMemberBtn: "➕ പുതിയ അംഗത്തെ ചേർക്കുക",
       memberIdLabel: "അംഗത്വ നമ്പർ",
       memberNameLabel: "അംഗത്തിന്റെ പേര്",
       addressLabel: "മേൽവിലാസം",
       wardLabel: "വാർഡ്",
-      qrCodeLabel: "ഡിജിറ്റൽ ക്യുആർ കോഡ്",
-      downloadQrBtn: "📥 ക്യുആർ ഐഡി ഡൗൺലോഡ് ചെയ്യുക",
       deactivateBtn: "നിഷ്ക്രിയമാക്കുക",
 
       // Attendance Kiosk
@@ -458,5 +454,6 @@ i18n.use(initReactI18next).init({
   fallbackLng: "en",
   interpolation: { escapeValue: false },
 });
+document.documentElement.lang = savedLanguage === "ml" ? "ml-IN" : "en";
 
 export default i18n;

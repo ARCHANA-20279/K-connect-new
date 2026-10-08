@@ -18,8 +18,8 @@ const CommunityLearning = () => {
       ];
 
   return (
-    <div className="container py-4 py-lg-5" style={{ maxWidth: 1180 }}>
-      <section className="p-4 p-lg-5 rounded-4 text-white shadow-sm mb-4" style={{ background: "linear-gradient(120deg, #0f2b5c, #047857)" }}>
+    <div className="container py-4 py-lg-5 community-learning-page" style={{ maxWidth: 1180 }}>
+      <section className="community-learning-hero p-4 p-lg-5 rounded-4 text-white shadow-sm mb-4">
         <div className="small fw-bold text-uppercase mb-2" style={{ letterSpacing: ".12em", opacity: .8 }}>
           {isMalayalam ? "കുടുംബശ്രീ പഠനവിഭവങ്ങൾ" : "KUDUMBASHREE LEARNING RESOURCES"}
         </div>
@@ -46,13 +46,13 @@ const CommunityLearning = () => {
             <div className="card-body p-4">
               <div className="d-flex flex-wrap justify-content-between align-items-start gap-3">
                 <div>
-                  <span className="badge rounded-pill text-bg-success mb-2">{isMalayalam ? "മലയാളം" : "Malayalam"}</span>
+                  <span className="badge rounded-pill text-bg-primary mb-2">{isMalayalam ? "മലയാളം" : "Malayalam"}</span>
                   <h2 className="h5 fw-bold mb-2">{isMalayalam ? "കുടുംബശ്രീ പരിശീലന വീഡിയോ" : "Kudumbashree training video"}</h2>
                   <p className="text-secondary mb-0">
                     {isMalayalam ? "സമൂഹ പരിശീലനത്തിനായി പങ്കുവെച്ച വീഡിയോ." : "Video shared for community learning."}
                   </p>
                 </div>
-                <a className="btn btn-success rounded-pill px-3" href={videoUrl} target="_blank" rel="noreferrer">
+                <a className="btn btn-primary rounded-pill px-3" href={videoUrl} target="_blank" rel="noreferrer">
                   {isMalayalam ? "യൂട്യൂബിൽ തുറക്കുക ↗" : "Open on YouTube ↗"}
                 </a>
               </div>

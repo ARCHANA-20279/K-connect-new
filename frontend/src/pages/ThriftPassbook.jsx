@@ -27,6 +27,7 @@ const ThriftPassbook = () => {
 
   // Deposit modal
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [editingDeposit, setEditingDeposit] = useState(null);
   const [form, setForm] = useState({
     memberId: "",
     amount: "",
@@ -37,6 +38,16 @@ const ThriftPassbook = () => {
 
   // Passbook search term
   const [passbookFilter, setPassbookFilter] = useState("");
+  const memberThriftTotals = members.map((member) => {
+    const summary = data.memberSummaries.find(
+      (item) => item.memberId?.toLowerCase() === member.memberId?.toLowerCase()
+    );
+    return {
+      ...member,
+      totalSaved: Number(summary?.totalSaved) || 0,
+      depositCount: Number(summary?.depositCount) || 0,
+    };
+  });
 
   // Fetch all thrift data & members
   const fetchData = async () => {
@@ -96,6 +107,30 @@ const ThriftPassbook = () => {
     setActiveTab("passbook");
   };
 
+  const openNewDeposit = () => {
+    setEditingDeposit(null);
+    setForm({
+      memberId: "",
+      amount: "",
+      date: new Date().toISOString().split("T")[0],
+      paymentMode: "Cash",
+      remarks: "",
+    });
+    setShowDepositModal(true);
+  };
+
+  const openEditDeposit = (deposit) => {
+    setEditingDeposit(deposit);
+    setForm({
+      memberId: deposit.memberId,
+      amount: String(deposit.amount),
+      date: deposit.date,
+      paymentMode: deposit.paymentMode || "Cash",
+      remarks: deposit.remarks || "",
+    });
+    setShowDepositModal(true);
+  };
+
   // Submit Thrift Deposit
   const handleDepositSubmit = async (e) => {
     e.preventDefault();
@@ -104,8 +139,19 @@ const ThriftPassbook = () => {
       return;
     }
     try {
-      await api.post("/thrift", form);
+      const depositedMemberId = form.memberId;
+      if (editingDeposit) {
+        await api.put(`/thrift/${editingDeposit._id}`, {
+          amount: form.amount,
+          date: form.date,
+          paymentMode: form.paymentMode,
+          remarks: form.remarks,
+        });
+      } else {
+        await api.post("/thrift", form);
+      }
       setShowDepositModal(false);
+      setEditingDeposit(null);
       setForm({
         memberId: "",
         amount: "",
@@ -113,10 +159,13 @@ const ThriftPassbook = () => {
         paymentMode: "Cash",
         remarks: "",
       });
-      fetchData();
-      alert("Thrift deposit recorded successfully!");
+      setSelectedMemberId(depositedMemberId);
+      setActiveTab("passbook");
+      await fetchData();
+      await fetchPassbook(depositedMemberId);
+      alert(editingDeposit ? "Thrift entry updated successfully." : "Thrift deposit recorded successfully!");
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to record deposit");
+      alert(err.response?.data?.message || (editingDeposit ? "Failed to update thrift entry" : "Failed to record deposit"));
     }
   };
 
@@ -153,7 +202,7 @@ const ThriftPassbook = () => {
               <button
                 className="btn btn-light fw-bold text-success px-4 py-2 shadow-sm"
                 style={{ borderRadius: "12px" }}
-                onClick={() => setShowDepositModal(true)}
+                onClick={openNewDeposit}
               >
                 {t("recordDepositBtn")}
               </button>
@@ -173,7 +222,8 @@ const ThriftPassbook = () => {
           </div>
         </div>
 
-        {/* KPI CARDS */}
+        {/* Collection summary is for staff; member totals are shown in the passbook below. */}
+        {!isMember && <>
         <div className="row g-3 mb-4">
           <div className="col-md-4">
             <div className="portal-kpi-card">
@@ -217,9 +267,10 @@ const ThriftPassbook = () => {
             ? (i18n.language === "ml" ? "എല്ലാ NHG-കളിലെയും K-Connect-ൽ രേഖപ്പെടുത്തിയ നിക്ഷേപങ്ങളുടെ ആകെ തുക. പിൻവലിക്കലുകൾ ഇതിൽ നിന്ന് കുറച്ചിട്ടില്ല." : "Platform-wide sum of thrift deposits recorded in K-Connect. Withdrawals are not deducted.")
             : (i18n.language === "ml" ? "നിങ്ങളുടെ NHG-യിലെ K-Connect-ൽ രേഖപ്പെടുത്തിയ നിക്ഷേപങ്ങളുടെ ആകെ തുക. പിൻവലിക്കലുകൾ ഇതിൽ നിന്ന് കുറച്ചിട്ടില്ല." : "Sum of thrift deposits recorded for your NHG in K-Connect. Withdrawals are not deducted.")}
         </div>
+        </>}
 
         {/* TABS HEADER */}
-        <div className="d-flex gap-2 mb-3">
+        {!isMember && <div className="d-flex gap-2 mb-3">
           {(isSecretary || isMainAdmin) && (
           <button
             className={`btn btn-sm ${activeTab === "register" ? "btn-primary" : "btn-light border"}`}
@@ -234,16 +285,22 @@ const ThriftPassbook = () => {
           >
             📖 {t("passbookTab")}
           </button>
-        </div>
+        </div>}
 
         {/* TAB 1: COLLECTION REGISTER */}
         {activeTab === "register" && (
+          <>
           <div className="portal-card">
-            <div className="portal-card-header">
-              <h5 className="portal-card-title">Recent Thrift Deposits</h5>
-              <span className="badge bg-light text-dark border">
-                Live Register ({data.deposits.length})
-              </span>
+            <div className="portal-card-header d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+              <div>
+                <h5 className="portal-card-title mb-1">Recent Thrift Deposits</h5>
+                <span className="badge bg-light text-dark border">
+                  Live Register ({data.deposits.length})
+                </span>
+              </div>
+              {isSecretary && <button type="button" className="btn btn-success fw-semibold" onClick={openNewDeposit}>
+                + Add Member Thrift
+              </button>}
             </div>
 
             {loading ? (
@@ -251,7 +308,7 @@ const ThriftPassbook = () => {
             ) : data.deposits.length === 0 ? (
               <div className="text-center py-5 text-muted">
                 <p className="mb-0">No thrift deposits recorded yet.</p>
-                <small>Click "Record Thrift Deposit" to log weekly savings.</small>
+                {isSecretary && <small>Use “Add Member Thrift” above to record a member’s savings.</small>}
               </div>
             ) : (
               <div className="table-responsive">
@@ -265,7 +322,7 @@ const ThriftPassbook = () => {
                       <th>Payment Mode</th>
                       <th>Collected By</th>
                       <th>Passbook</th>
-                      {isSecretary && <th>Action</th>}
+                      {isSecretary && <th>Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -298,13 +355,19 @@ const ThriftPassbook = () => {
                         </td>
                         {isSecretary && (
                           <td>
-                            <button
-                              className="btn btn-sm btn-outline-danger py-0 px-2"
-                              title="Delete Record"
-                              onClick={() => handleDeleteThrift(item._id, item.receiptNumber)}
-                            >
-                              🗑️
-                            </button>
+                            <div className="d-flex gap-1">
+                              <button type="button" className="btn btn-sm btn-outline-success py-0 px-2" onClick={() => openEditDeposit(item)}>
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-danger py-0 px-2"
+                                title="Delete Record"
+                                onClick={() => handleDeleteThrift(item._id, item.receiptNumber)}
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -314,6 +377,52 @@ const ThriftPassbook = () => {
               </div>
             )}
           </div>
+          {isSecretary && <div className="portal-card mt-4">
+            <div className="portal-card-header d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+              <div>
+                <h5 className="portal-card-title mb-1">Member Thrift Totals</h5>
+                <small className="text-muted">Cumulative amount recorded for each active NHG member</small>
+              </div>
+              <span className="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
+                NHG Total: ₹{data.totalSavingsFund.toLocaleString()}
+              </span>
+            </div>
+            {loading ? (
+              <div className="text-center py-4 text-muted">Loading member totals…</div>
+            ) : memberThriftTotals.length === 0 ? (
+              <div className="text-center py-4 text-muted">No active members found for this NHG.</div>
+            ) : (
+              <div className="table-responsive">
+                <table className="portal-table table mb-0">
+                  <thead>
+                    <tr>
+                      <th>Member</th>
+                      <th>Member ID</th>
+                      <th>Deposits</th>
+                      <th>Total Thrift</th>
+                      <th>Passbook</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {memberThriftTotals.map((member) => (
+                      <tr key={member._id}>
+                        <td className="fw-semibold">{member.name}</td>
+                        <td><span className="badge bg-light text-dark border font-monospace">{member.memberId}</span></td>
+                        <td>{member.depositCount}</td>
+                        <td className="fw-bold text-success">₹{member.totalSaved.toLocaleString()}</td>
+                        <td>
+                          <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => handleSelectMemberPassbook(member.memberId)}>
+                            View Passbook
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>}
+          </>
         )}
 
         {/* TAB 2: DIGITAL PASSBOOK */}
@@ -510,18 +619,20 @@ const ThriftPassbook = () => {
         <div className="custom-modal-backdrop">
           <div className="custom-modal-card">
             <div className="custom-modal-header bg-primary text-white">
-              <h5 className="custom-modal-title text-white">💳 Record Weekly Thrift Deposit</h5>
+              <h5 className="custom-modal-title text-white">💳 {editingDeposit ? "Update Thrift Entry" : "Record Weekly Thrift Deposit"}</h5>
               <button
                 type="button"
                 className="btn-close btn-close-white"
-                onClick={() => setShowDepositModal(false)}
+                onClick={() => { setShowDepositModal(false); setEditingDeposit(null); }}
               ></button>
             </div>
             <form onSubmit={handleDepositSubmit}>
               <div className="custom-modal-body">
                 <div className="form-group-item">
                   <label className="form-group-label">Select NHG Member *</label>
-                  <select
+                  {editingDeposit ? <div className="form-control-input bg-light" aria-readonly="true">
+                    {editingDeposit.memberName} ({editingDeposit.memberId})
+                  </div> : <select
                     className="form-control-input"
                     value={form.memberId}
                     onChange={(e) => setForm({ ...form, memberId: e.target.value })}
@@ -533,7 +644,7 @@ const ThriftPassbook = () => {
                         {m.name} ({m.memberId}) - Ward {m.ward}
                       </option>
                     ))}
-                  </select>
+                  </select>}
                 </div>
 
                 <div className="row">
@@ -589,12 +700,12 @@ const ThriftPassbook = () => {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setShowDepositModal(false)}
+                  onClick={() => { setShowDepositModal(false); setEditingDeposit(null); }}
                 >
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-success fw-bold px-3">
-                  ✓ Record & Generate Receipt
+                  ✓ {editingDeposit ? "Save Changes" : "Record & Generate Receipt"}
                 </button>
               </div>
             </form>

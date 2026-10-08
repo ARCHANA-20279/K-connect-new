@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
-import { QRCodeCanvas } from "qrcode.react";
 import api from "../api";
+import { io } from "socket.io-client";
 import { speakMemberWelcome } from "../utils/welcomeSpeech";
 import "../portal.css";
 
@@ -59,6 +59,11 @@ const Dashboard = () => {
   const [allUsers, setAllUsers] = useState([]);
   const [allNotices, setAllNotices] = useState([]);
   const [cdsNhgCount, setCdsNhgCount] = useState(0);
+  const [auditWard, setAuditWard] = useState("");
+  const [auditFrom, setAuditFrom] = useState(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`);
+  const [auditTo, setAuditTo] = useState(new Date().toISOString().slice(0, 10));
+  const [auditDownloading, setAuditDownloading] = useState(false);
+  const [auditMessage, setAuditMessage] = useState("");
 
   // Modals for Admin
   const [viewNhgModal, setViewNhgModal] = useState(null);
@@ -80,6 +85,7 @@ const Dashboard = () => {
   const [nhgNotices, setNhgNotices] = useState([]);
   const [memberPassbook, setMemberPassbook] = useState(null);
   const [memberId, setMemberId] = useState(user?.memberId || "");
+  const [peerVoteNotice, setPeerVoteNotice] = useState(null);
 
   // Load Dashboard Data
   const loadDashboard = async () => {
@@ -114,7 +120,13 @@ const Dashboard = () => {
           api.get("/loans"),
           api.get("/notifications"),
         ]);
-        if (nhgsRes.status === "fulfilled") setCdsNhgCount(nhgsRes.value.data.total || nhgsRes.value.data.nhgs?.length || 0);
+        if (nhgsRes.status === "fulfilled") {
+          const nhgs = nhgsRes.value.data.nhgs || [];
+          setAllNHGs(nhgs);
+          setCdsNhgCount(nhgsRes.value.data.total || nhgs.length);
+          const firstWard = nhgs.find((nhg) => ["Active", "Approved"].includes(nhg.status) && nhg.ward)?.ward;
+          if (firstWard) setAuditWard((current) => current && nhgs.some((nhg) => ["Active", "Approved"].includes(nhg.status) && String(nhg.ward) === current) ? current : String(firstWard));
+        }
         if (loansRes.status === "fulfilled") setNhgLoans(Array.isArray(loansRes.value.data) ? loansRes.value.data : []);
         if (noticesRes.status === "fulfilled") setNhgNotices(noticesRes.value.data.notifications || []);
       } else {
@@ -182,6 +194,88 @@ const Dashboard = () => {
   useEffect(() => {
     loadDashboard();
   }, [user]);
+
+  const downloadAuditReport = async (event) => {
+    event.preventDefault();
+    if (!auditWard || !auditFrom || !auditTo || auditFrom > auditTo) {
+      setAuditMessage(isMalayalam ? "വാർഡും ശരിയായ തീയതി പരിധിയും തിരഞ്ഞെടുക്കുക." : "Choose a ward and a valid date range.");
+      return;
+    }
+    setAuditDownloading(true);
+    setAuditMessage("");
+    try {
+      const response = await api.get("/audit/cds-report.pdf", {
+        params: { ward: auditWard, from: auditFrom, to: auditTo },
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      const filename = `K-Connect-Ward-${auditWard}-Audit-${auditFrom}-to-${auditTo}.pdf`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      if (window.crypto?.subtle) {
+        const digest = await window.crypto.subtle.digest("SHA-256", await response.data.arrayBuffer());
+        const checksum = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+        const checksumUrl = URL.createObjectURL(new Blob([`${checksum}  ${filename}\n`], { type: "text/plain" }));
+        const checksumLink = document.createElement("a");
+        checksumLink.href = checksumUrl;
+        checksumLink.download = `${filename}.sha256`;
+        document.body.appendChild(checksumLink);
+        checksumLink.click();
+        checksumLink.remove();
+        window.setTimeout(() => URL.revokeObjectURL(checksumUrl), 1000);
+      }
+      setAuditMessage(isMalayalam ? "ഓഡിറ്റ് PDFയും SHA-256 പരിശോധനാ ഫയലും ഡൗൺലോഡ് ചെയ്തു. പിന്നീട് PDF മാറ്റിയിട്ടുണ്ടോ എന്ന് പരിശോധിക്കാൻ രണ്ടും സൂക്ഷിക്കുക." : "Audit PDF and SHA-256 checksum downloaded. Keep both files; the checksum can help detect later changes to the PDF.");
+    } catch (error) {
+      let message = isMalayalam ? "റിപ്പോർട്ട് തയ്യാറാക്കാനായില്ല. വീണ്ടും ശ്രമിക്കുക." : "Could not generate the report. Please try again.";
+      if (error.response?.data instanceof Blob) {
+        try { message = JSON.parse(await error.response.data.text()).message || message; } catch { /* Keep the friendly fallback. */ }
+      }
+      setAuditMessage(message);
+    } finally {
+      setAuditDownloading(false);
+    }
+  };
+
+  // Keep the member dashboard in sync with NHG loan-voting activity.
+  useEffect(() => {
+    if (!isMember) return undefined;
+    let storedUser;
+    try {
+      storedUser = JSON.parse(localStorage.getItem("kconnect_user") || "null");
+    } catch {
+      storedUser = null;
+    }
+    if (!storedUser?.token) return undefined;
+
+    const socketUrl = (api.defaults.baseURL || "http://localhost:5000/api").replace(/\/api\/?$/, "");
+    const socket = io(socketUrl, {
+      auth: { token: storedUser.token },
+      transports: ["websocket", "polling"],
+    });
+    const refreshVotingData = async (event) => {
+      const [loansRes, noticesRes] = await Promise.allSettled([
+        api.get("/loans"),
+        api.get("/notifications"),
+      ]);
+      if (loansRes.status === "fulfilled" && Array.isArray(loansRes.value.data)) {
+        setNhgLoans(loansRes.value.data);
+      }
+      if (noticesRes.status === "fulfilled") {
+        setNhgNotices(noticesRes.value.data.notifications || []);
+      }
+      if (event?.memberName && event?.amount) {
+        setPeerVoteNotice(event);
+      }
+    };
+    socket.on("loan:vote-request", refreshVotingData);
+    socket.on("loan:vote-update", refreshVotingData);
+    return () => socket.disconnect();
+  }, [isMember]);
 
   useEffect(() => {
     if (!isAdsOfficer) return undefined;
@@ -1318,6 +1412,7 @@ const Dashboard = () => {
   }
 
   if (isCdsOfficer) {
+    const reportWards = [...new Set(allNHGs.filter((nhg) => ["Active", "Approved"].includes(nhg.status)).map((nhg) => String(nhg.ward || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     const cdsPendingLoans = nhgLoans.filter((loan) => loan.status === "CDS Review");
     const cdsLoanAlerts = nhgNotices.filter((notice) => notice.type === "LOAN" && (
       !notice.relatedLoan || cdsPendingLoans.some((loan) => loan._id === notice.relatedLoan)
@@ -1337,6 +1432,40 @@ const Dashboard = () => {
             <div className="col-md-4"><div className="card border-0 shadow-sm p-4 h-100" style={{ borderRadius: "16px" }}><div className="small text-muted fw-semibold">{isMalayalam ? "സി.ഡി.എസ് തീരുമാനത്തിനായി കാത്തിരിക്കുന്നു" : "Loans awaiting CDS decision"}</div><div className={`display-6 fw-bold ${cdsPendingLoans.length ? "text-warning" : "text-success"}`}>{loading ? "…" : cdsPendingLoans.length}</div><Link to="/loans" className="small">{isMalayalam ? "വായ്പകൾ പരിശോധിക്കുക" : "Review loans"} →</Link></div></div>
             <div className="col-md-4"><div className="card border-0 shadow-sm p-4 h-100" style={{ borderRadius: "16px" }}><div className="small text-muted fw-semibold">{isMalayalam ? "പ്രസിദ്ധീകരിച്ച അറിയിപ്പുകൾ" : "Published notices"}</div><div className="display-6 fw-bold text-success">{loading ? "…" : cdsNotices.length}</div><Link to="/circulars" className="small">{isMalayalam ? "അറിയിപ്പുകൾ എഴുതുക / കാണുക" : "Write or view notices"} →</Link></div></div>
           </div>
+
+          <section className="card border-0 shadow-sm p-4 mb-4" style={{ borderRadius: "18px" }}>
+            <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+              <div>
+                <h2 className="h5 fw-bold mb-1">📄 {isMalayalam ? "ഓഡിറ്റ് റിപ്പോർട്ട്" : "CDS audit report"}</h2>
+                <p className="text-muted small mb-0">{isMalayalam ? "വാർഡ് അടിസ്ഥാനത്തിലുള്ള സമ്പാദ്യം, ഹാജർ, വായ്പ വിതരണം എന്നിവയുടെ PDF റിപ്പോർട്ട് ഡൗൺലോഡ് ചെയ്യുക." : "Download a ward-specific PDF summary of thrift, attendance, and loan disbursements."}</p>
+              </div>
+              <span className="badge text-bg-light border">{isMalayalam ? "സി.ഡി.എസ് ഉദ്യോഗസ്ഥർക്ക് മാത്രം" : "CDS officers only"}</span>
+            </div>
+            <form onSubmit={downloadAuditReport} className="row g-3 align-items-end">
+              <div className="col-sm-6 col-lg-3">
+                <label className="form-label fw-semibold" htmlFor="audit-ward">{isMalayalam ? "വാർഡ്" : "Ward"}</label>
+                <select id="audit-ward" className="form-select" value={auditWard} onChange={(event) => setAuditWard(event.target.value)} required>
+                  <option value="">{isMalayalam ? "വാർഡ് തിരഞ്ഞെടുക്കുക" : "Select a ward"}</option>
+                  {reportWards.map((ward) => <option key={ward} value={ward}>{isMalayalam ? `വാർഡ് ${ward}` : `Ward ${ward}`}</option>)}
+                </select>
+              </div>
+              <div className="col-sm-6 col-lg-3">
+                <label className="form-label fw-semibold" htmlFor="audit-from">{isMalayalam ? "മുതൽ" : "From"}</label>
+                <input id="audit-from" className="form-control" type="date" value={auditFrom} max={auditTo} onChange={(event) => setAuditFrom(event.target.value)} required />
+              </div>
+              <div className="col-sm-6 col-lg-3">
+                <label className="form-label fw-semibold" htmlFor="audit-to">{isMalayalam ? "വരെ" : "To"}</label>
+                <input id="audit-to" className="form-control" type="date" value={auditTo} min={auditFrom} onChange={(event) => setAuditTo(event.target.value)} required />
+              </div>
+              <div className="col-sm-6 col-lg-3 d-grid">
+                <button type="submit" className="btn btn-success" disabled={auditDownloading || !reportWards.length}>
+                  {auditDownloading ? (isMalayalam ? "റിപ്പോർട്ട് തയ്യാറാക്കുന്നു…" : "Preparing report…") : `⬇ ${isMalayalam ? "ഓഡിറ്റ് റിപ്പോർട്ട് ഡൗൺലോഡ് ചെയ്യുക" : "Download Audit Report"}`}
+                </button>
+              </div>
+            </form>
+            {auditMessage && <div className="small text-muted mt-3" role="status">{auditMessage}</div>}
+            {!reportWards.length && <div className="alert alert-warning py-2 mt-3 mb-0">{isMalayalam ? "റിപ്പോർട്ടിനായി സജീവ വാർഡുകൾ ലഭ്യമല്ല." : "No active ward options are available for this CDS account."}</div>}
+          </section>
 
           <section className="card border-0 shadow-sm p-4 mb-4" style={{ borderRadius: "18px" }} aria-live="polite">
             <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
@@ -1360,7 +1489,7 @@ const Dashboard = () => {
   return (
     <div style={{ backgroundColor: "#f8fafc", minHeight: "85vh", padding: "32px 16px" }}>
       <div className="container" style={{ maxWidth: "960px" }}>
-        {/* Member Header Card with QR */}
+        {/* Member welcome card. Attendance uses the Secretary's meeting QR. */}
         <div
           className="card border-0 p-4 mb-4 text-white shadow-sm"
           style={{
@@ -1369,27 +1498,27 @@ const Dashboard = () => {
           }}
         >
           <div className="row align-items-center g-4">
-            <div className="col-md-8">
+            <div className="col-12">
               <span
                 className="badge px-3 py-1 mb-2 rounded-pill"
                 style={{ backgroundColor: "rgba(255,255,255,0.2)", fontSize: "12px", color: "#a7f3d0" }}
               >
-                👤 Kudumbashree Member Portal
+                👤 {isMalayalam ? "കുടുംബശ്രീ അംഗ പോർട്ടൽ" : "Kudumbashree Member Portal"}
               </span>
               <h2 className="fw-bolder mb-1 text-white">
-                Welcome, {user?.name || "Member"}
+                {isMalayalam ? "സ്വാഗതം" : "Welcome"}, {user?.name || (isMalayalam ? "അംഗം" : "Member")}
               </h2>
               <div className="d-flex align-items-center gap-2 mb-3 flex-wrap">
                 <span className="badge bg-white text-dark font-monospace fs-6 px-3 py-1">
-                  ID: {memberId || user?.memberId || "KC00004"}
+                  {isMalayalam ? "ഐഡി" : "ID"}: {memberId || user?.memberId || "KC00004"}
                 </span>
                 <span className="badge bg-emerald-800 text-white border border-light border-opacity-25 px-3 py-1">
-                  NHG: {user?.nhgName || "deepam"}
+                  {isMalayalam ? "അയൽക്കൂട്ടം" : "NHG"}: {user?.nhgName || "deepam"}
                 </span>
-                <span className="badge bg-success px-2 py-1">✓ Active</span>
+                <span className="badge bg-success px-2 py-1">✓ {isMalayalam ? "സജീവം" : "Active"}</span>
               </div>
               <p className="text-white-50 small mb-3" style={{ maxWidth: "500px" }}>
-                Scan the Secretary's Meeting QR code during weekly roll-call to mark your attendance.
+                {isMalayalam ? "പ്രതിവാര യോഗത്തിലെ ഹാജർ രേഖപ്പെടുത്താൻ സെക്രട്ടറിയുടെ മീറ്റിംഗ് ക്യു.ആർ കോഡ് സ്കാൻ ചെയ്യുക." : "Scan the Secretary's Meeting QR code during weekly roll-call to mark your attendance."}
               </p>
               <div className="d-flex gap-2 flex-wrap">
                 <button type="button" className="btn btn-outline-light btn-sm px-3" onClick={speakWelcome}>
@@ -1400,37 +1529,17 @@ const Dashboard = () => {
                     : (isMalayalam ? "ശബ്ദത്തോടെ സ്വാഗതം കേൾക്കുക" : "Play welcome aloud")}
                 </button>
                 <Link to="/attendance" className="btn btn-warning btn-sm fw-bold px-3 shadow-sm text-dark">
-                  📱 Scan Meeting QR Code →
+                  📱 {isMalayalam ? "യോഗ ക്യു.ആർ കോഡ് സ്കാൻ ചെയ്യുക →" : "Scan Meeting QR Code →"}
                 </Link>
                 <Link to="/thrift" className="btn btn-outline-light btn-sm px-3">
-                  💳 View My Passbook
+                  💳 {isMalayalam ? "എന്റെ പാസ്ബുക്ക് കാണുക" : "View My Passbook"}
                 </Link>
                 <Link to="/loans" className="btn btn-outline-light btn-sm px-3">
-                  💰 Apply for Loan
+                  💰 {isMalayalam ? "വായ്പയ്ക്ക് അപേക്ഷിക്കുക" : "Apply for Loan"}
                 </Link>
               </div>
             </div>
 
-            <div className="col-md-4 text-center">
-              <div
-                className="d-inline-block p-3 bg-white rounded-3 shadow-lg"
-                style={{ border: "3px solid #34d399" }}
-              >
-                <QRCodeCanvas
-                  value={memberId || user?.memberId || "KC00004"}
-                  size={150}
-                  level="H"
-                />
-                <div className="mt-2 text-center">
-                  <small className="fw-bold text-dark font-monospace d-block">
-                    {memberId || user?.memberId || "KC00004"}
-                  </small>
-                  <span className="badge bg-dark text-white" style={{ fontSize: "9px" }}>
-                    Attendance ID Card
-                  </span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -1449,35 +1558,54 @@ const Dashboard = () => {
           </div>
         )}
 
+        {peerVoteNotice && (
+          <div className="alert alert-info d-flex justify-content-between align-items-center gap-3 mb-4" role="status">
+            <div>
+              <strong>{isMalayalam ? "പുതിയ എൻ.എച്ച്.ജി വായ്പാ വോട്ടെടുപ്പ്" : "New NHG loan vote"}</strong>
+              <div className="small">
+                {isMalayalam
+                  ? `${peerVoteNotice.memberName} ₹${Number(peerVoteNotice.amount).toLocaleString("en-IN")} വായ്പയ്ക്ക് അപേക്ഷിച്ചു. നിങ്ങളുടെ വോട്ട് രേഖപ്പെടുത്താൻ വായ്പാ പേജ് തുറക്കുക.`
+                  : `${peerVoteNotice.memberName} requested a loan of ₹${Number(peerVoteNotice.amount).toLocaleString("en-IN")}. Open Loans to cast your vote.`}
+              </div>
+            </div>
+            <div className="d-flex align-items-center gap-2 flex-shrink-0">
+              <Link to="/loans" className="btn btn-sm btn-primary">
+                {isMalayalam ? "വായ്പകൾ തുറക്കുക" : "Open loans"}
+              </Link>
+              <button type="button" className="btn-close" aria-label={isMalayalam ? "അടയ്ക്കുക" : "Dismiss"} onClick={() => setPeerVoteNotice(null)} />
+            </div>
+          </div>
+        )}
+
         {/* Member Quick Summary Cards */}
         <div className="row g-3 mb-4">
           <div className="col-md-4">
             <div className="card p-3 border-0 shadow-sm" style={{ borderRadius: "14px", backgroundColor: "#ffffff" }}>
-              <div className="text-muted small fw-semibold">My Total Savings</div>
+              <div className="text-muted small fw-semibold">{isMalayalam ? "എന്റെ ആകെ സമ്പാദ്യം" : "My Total Savings"}</div>
               <h3 className="fw-bold text-success mb-1">
                 ₹{memberPassbook?.totalSaved !== undefined ? memberPassbook.totalSaved.toLocaleString() : "—"}
               </h3>
-              <small className="text-muted">Recorded weekly thrift deposits</small>
+              <small className="text-muted">{isMalayalam ? "രേഖപ്പെടുത്തിയ പ്രതിവാര ലഘുസമ്പാദ്യം" : "Recorded weekly thrift deposits"}</small>
             </div>
           </div>
 
           <div className="col-md-4">
             <div className="card p-3 border-0 shadow-sm" style={{ borderRadius: "14px", backgroundColor: "#ffffff" }}>
-              <div className="text-muted small fw-semibold">My Active Loans</div>
+              <div className="text-muted small fw-semibold">{isMalayalam ? "എന്റെ വായ്പകൾ" : "My Active Loans"}</div>
               <h3 className="fw-bold text-primary mb-1">
                 {nhgLoans.filter((l) => l.memberId === (memberId || user?.memberId)).length}
               </h3>
-              <small className="text-muted">Applications submitted</small>
+              <small className="text-muted">{isMalayalam ? "സമർപ്പിച്ച അപേക്ഷകൾ" : "Applications submitted"}</small>
             </div>
           </div>
 
           <div className="col-md-4">
             <div className="card p-3 border-0 shadow-sm" style={{ borderRadius: "14px", backgroundColor: "#ffffff" }}>
-              <div className="text-muted small fw-semibold">My NHG Unit</div>
+              <div className="text-muted small fw-semibold">{isMalayalam ? "എന്റെ അയൽക്കൂട്ടം" : "My NHG Unit"}</div>
               <h4 className="fw-bold text-dark mb-1">
                 {user?.nhgName || "deepam"}
               </h4>
-              <small className="text-muted">Ward 12, Kudumbashree CDS</small>
+              <small className="text-muted">{isMalayalam ? "വാർഡ് 12, കുടുംബശ്രീ സി.ഡി.എസ്" : "Ward 12, Kudumbashree CDS"}</small>
             </div>
           </div>
         </div>
@@ -1486,8 +1614,8 @@ const Dashboard = () => {
           <div className="card border-0 shadow-sm p-4 mb-4" style={{ borderRadius: "16px", backgroundColor: "#eff6ff" }} role="status">
             <div className="d-flex justify-content-between align-items-center gap-3 flex-wrap">
               <div>
-                <h6 className="fw-bold text-dark mb-1">🔔 Loan application update</h6>
-                <p className="small text-muted mb-2">Your Secretary has reviewed a loan application. Check the decision and any remarks.</p>
+                <h6 className="fw-bold text-dark mb-1">🔔 {isMalayalam ? "വായ്പാ അപേക്ഷയുടെ പുതുക്കൽ" : "Loan application update"}</h6>
+                <p className="small text-muted mb-2">{isMalayalam ? "നിങ്ങളുടെ സെക്രട്ടറി വായ്പാ അപേക്ഷ പരിശോധിച്ചു. തീരുമാനവും കുറിപ്പുകളും കാണുക." : "Your Secretary has reviewed a loan application. Check the decision and any remarks."}</p>
                 <div className="d-flex gap-2 flex-wrap">
                   {nhgLoans
                     .filter((loan) => loan.memberId === (memberId || user?.memberId) && ["Approved", "Rejected", "Completed"].includes(loan.status))
@@ -1499,7 +1627,7 @@ const Dashboard = () => {
                     ))}
                 </div>
               </div>
-              <Link to="/loans" className="btn btn-primary btn-sm fw-semibold">View loan details</Link>
+              <Link to="/loans" className="btn btn-primary btn-sm fw-semibold">{isMalayalam ? "വായ്പാ വിവരങ്ങൾ കാണുക" : "View loan details"}</Link>
             </div>
           </div>
         )}
@@ -1507,9 +1635,9 @@ const Dashboard = () => {
         {/* Recent Notices for Member */}
         <div className="card border-0 shadow-sm p-4" style={{ borderRadius: "16px", backgroundColor: "#ffffff" }}>
           <div className="d-flex justify-content-between align-items-center mb-3">
-            <h6 className="fw-bold text-dark mb-0">📢 Important Announcements & Notices</h6>
+            <h6 className="fw-bold text-dark mb-0">📢 {isMalayalam ? "പ്രധാന അറിയിപ്പുകൾ" : "Important Announcements & Notices"}</h6>
             <Link to="/circulars" className="small text-decoration-none fw-semibold" style={{ color: "#0f766e" }}>
-              View All →
+              {isMalayalam ? "എല്ലാം കാണുക →" : "View All →"}
             </Link>
           </div>
 
