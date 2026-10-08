@@ -460,7 +460,7 @@ const ThriftPassbook = () => {
                     title="Print Passbook Statement"
                   >
                     <span>🖨️</span>
-                    <span>{t("printPassbookStatement") || "Print Statement"}</span>
+                    <span>{t("printPassbookStatement") || "Print Passbook Statement"}</span>
                   </button>
                 )}
               </div>

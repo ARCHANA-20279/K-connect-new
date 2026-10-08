@@ -57,6 +57,15 @@ export const AuthProvider = ({ children }) => {
     setAuthReady(true);
   };
 
+  const updateUser = (updates) => {
+    const stored = localStorage.getItem("kconnect_user");
+    const current = stored ? JSON.parse(stored) : user;
+    if (!current) return;
+    const refreshed = { ...current, ...updates };
+    setUser(refreshed);
+    localStorage.setItem("kconnect_user", JSON.stringify(refreshed));
+  };
+
   const logout = () => {
     authCheckVersion.current += 1;
     setUser(null);
@@ -66,7 +75,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, authReady }}>
+    <AuthContext.Provider value={{ user, login, updateUser, logout, authReady }}>
       {children}
     </AuthContext.Provider>
   );

@@ -62,7 +62,7 @@ const registerNHG = async (req, res) => {
     if (passwordValue.length < 8) return res.status(400).json({ message: "Create a password with at least 8 characters." });
     if (!/^\d{1,3}$/.test(String(finalWard))) return res.status(400).json({ message: "Enter a valid ward number." });
     const phoneDigits = finalPhone.replace(/\D/g, "");
-    if (phoneDigits.length !== 10) return res.status(400).json({ message: "Secretary mobile number must contain 10 digits." });
+    if (!/^[6-9]\d{9}$/.test(phoneDigits)) return res.status(400).json({ message: "Enter a 10-digit Indian Secretary mobile number beginning with 6, 7, 8, or 9." });
     const members = Number(numberOfMembers || memberCount || 0);
     if (!Number.isInteger(members) || members < 1 || members > 100) return res.status(400).json({ message: "Member count must be between 1 and 100." });
 
@@ -90,7 +90,7 @@ const registerNHG = async (req, res) => {
       presidentName: presidentName ? presidentName.trim() : "",
       secretaryName: secretaryName.trim(),
       secretaryEmail: finalEmail,
-      secretaryPhone: finalPhone,
+      secretaryPhone: phoneDigits,
       memberCount: members,
       status: "Pending", // NHG must be verified by Main Admin before login
       panchayath: localBodyName || cdsName || "Kudumbashree CDS",
@@ -531,7 +531,7 @@ const assignSecretary = async (req, res) => {
 
     nhg.secretaryEmail = user.email;
     nhg.secretaryName = user.name;
-    if (user.phone) nhg.secretaryPhone = user.phone;
+    nhg.secretaryPhone = String(user.phone || "").replace(/\D/g, "");
     await nhg.save();
 
     return res.status(200).json({

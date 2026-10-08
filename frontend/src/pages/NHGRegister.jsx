@@ -42,7 +42,12 @@ const NHGRegister = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const nextValue = name === "secretaryMobileNumber"
+      ? value.replace(/\D/g, "").slice(0, 10)
+      : name === "secretaryEmail"
+        ? value.toLowerCase()
+        : value;
+    setFormData((prev) => ({ ...prev, [name]: nextValue }));
   };
 
   const handleSubmit = async (e) => {
@@ -52,8 +57,8 @@ const NHGRegister = () => {
       setError("Create a password with at least 8 characters.");
       return;
     }
-    if (!/^\d{10}$/.test(formData.secretaryMobileNumber.replace(/\D/g, ""))) {
-      setError("Enter a valid 10-digit Secretary mobile number.");
+    if (!/^[6-9]\d{9}$/.test(formData.secretaryMobileNumber)) {
+      setError("Enter a 10-digit Indian mobile number beginning with 6, 7, 8, or 9.");
       return;
     }
     setLoading(true);
@@ -78,7 +83,17 @@ const NHGRegister = () => {
             ← Back to Home
           </Link>
           <div className="d-flex align-items-center gap-2 mt-2">
-            <span style={{ fontSize: "28px" }}>🌱</span>
+            <span
+              className="d-inline-flex align-items-center justify-content-center rounded-3"
+              aria-hidden="true"
+              style={{ width: "42px", height: "42px", backgroundColor: "#e6f4ef", color: "#0f766e" }}
+            >
+              <svg width="25" height="25" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="10" cy="7" r="4" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
             <h2 className="fw-bold mb-0" style={{ color: "#0f766e" }}>
               Register Your Kudumbashree NHG
             </h2>
@@ -340,7 +355,7 @@ const NHGRegister = () => {
 
                   <div className="col-md-6">
                     <label className="form-label small fw-semibold text-dark">
-                      Secretary Mobile Number *
+                      Secretary Mobile Number (NHG contact) *
                     </label>
                     <input
                       type="tel"
@@ -352,14 +367,19 @@ const NHGRegister = () => {
                       autoComplete="off"
                       inputMode="numeric"
                       maxLength={10}
-                      pattern="[0-9]{10}"
+                      minLength={10}
+                      pattern="[6-9][0-9]{9}"
+                      title="Enter a 10-digit Indian mobile number beginning with 6, 7, 8, or 9."
                       required
                     />
+                    <small className="text-muted" style={{ fontSize: "11px" }}>
+                      This number is the NHG contact number and should be the current Secretary’s mobile.
+                    </small>
                   </div>
 
                   <div className="col-md-6">
                     <label className="form-label small fw-semibold text-dark">
-                      Secretary Email Address * (Used for Login)
+                      Secretary Email Address * (Secretary account login)
                     </label>
                     <input
                       type="email"

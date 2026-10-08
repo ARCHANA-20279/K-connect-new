@@ -682,8 +682,8 @@ const AttendanceKiosk = () => {
             {viewMode === "scanner" && (
               <div>
                 <div className="alert alert-info py-2 small mb-3">
-                  📱 <strong>Member Instructions:</strong> Point your phone camera at the Secretary's
-                  Meeting QR code. Your attendance will be automatically verified and recorded.
+                  📱 <strong>Member Instructions:</strong> Signing in alone does not record attendance.
+                  Scan the Secretary's active Meeting QR code; completed or cancelled meetings cannot accept scans.
                 </div>
 
                 <div

@@ -8,7 +8,7 @@ import { speakMemberWelcome } from "../utils/welcomeSpeech";
 import "../portal.css";
 
 const Dashboard = () => {
-  const { user, login, logout } = useAuth();
+  const { user, login, updateUser, logout } = useAuth();
   const { i18n } = useTranslation();
   const navigate = useNavigate();
 
@@ -86,6 +86,29 @@ const Dashboard = () => {
   const [memberPassbook, setMemberPassbook] = useState(null);
   const [memberId, setMemberId] = useState(user?.memberId || "");
   const [peerVoteNotice, setPeerVoteNotice] = useState(null);
+  const [secretaryPhone, setSecretaryPhone] = useState(user?.phone || "");
+  const [savingSecretaryPhone, setSavingSecretaryPhone] = useState(false);
+  const [secretaryPhoneFeedback, setSecretaryPhoneFeedback] = useState(null);
+
+  const saveSecretaryPhone = async (event) => {
+    event.preventDefault();
+    setSecretaryPhoneFeedback(null);
+    if (!/^[6-9]\d{9}$/.test(secretaryPhone)) {
+      setSecretaryPhoneFeedback({ type: "danger", text: "Enter a 10-digit Indian mobile number beginning with 6, 7, 8, or 9." });
+      return;
+    }
+    setSavingSecretaryPhone(true);
+    try {
+      const { data } = await api.patch("/auth/profile", { phone: secretaryPhone });
+      updateUser(data);
+      setSecretaryPhone(data.phone || secretaryPhone);
+      setSecretaryPhoneFeedback({ type: "success", text: "Secretary and NHG contact number updated." });
+    } catch (error) {
+      setSecretaryPhoneFeedback({ type: "danger", text: error.response?.data?.message || "Could not update the contact number. Please try again." });
+    } finally {
+      setSavingSecretaryPhone(false);
+    }
+  };
 
   // Load Dashboard Data
   const loadDashboard = async () => {
@@ -1176,6 +1199,38 @@ const Dashboard = () => {
             </div>
           </div>
 
+          <section className="card border-0 shadow-sm p-4 mb-4" style={{ borderRadius: "16px", backgroundColor: "#ffffff" }}>
+            <div className="row align-items-center g-3">
+              <div className="col-lg-5">
+                <h5 className="fw-bold mb-1">Secretary and NHG contact</h5>
+                <p className="text-muted small mb-0">
+                  The NHG uses its current Secretary’s mobile number as its contact. Update it here when the Secretary’s number changes.
+                </p>
+              </div>
+              <div className="col-lg-7">
+                <form className="d-flex flex-column flex-sm-row gap-2" onSubmit={saveSecretaryPhone}>
+                  <input
+                    className="form-control"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    aria-label="Secretary mobile number and NHG contact"
+                    value={secretaryPhone}
+                    maxLength={10}
+                    pattern="[6-9][0-9]{9}"
+                    onChange={(event) => setSecretaryPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                    required
+                  />
+                  <button className="btn btn-success text-nowrap" type="submit" disabled={savingSecretaryPhone}>
+                    {savingSecretaryPhone ? "Saving…" : "Update contact"}
+                  </button>
+                </form>
+                <small className="text-muted">Enter exactly 10 digits; Indian mobile numbers start with 6, 7, 8, or 9.</small>
+                {secretaryPhoneFeedback && <div className={`alert alert-${secretaryPhoneFeedback.type} py-2 px-3 mt-2 mb-0 small`} role="status">{secretaryPhoneFeedback.text}</div>}
+              </div>
+            </div>
+          </section>
+
           {/* 4 TOP NHG METRIC CARDS (Exact per Requirement 10) */}
           <div className="row g-3 mb-4 text-center">
             {/* 1. Members */}
@@ -1518,7 +1573,7 @@ const Dashboard = () => {
                 <span className="badge bg-success px-2 py-1">✓ {isMalayalam ? "സജീവം" : "Active"}</span>
               </div>
               <p className="text-white-50 small mb-3" style={{ maxWidth: "500px" }}>
-                {isMalayalam ? "പ്രതിവാര യോഗത്തിലെ ഹാജർ രേഖപ്പെടുത്താൻ സെക്രട്ടറിയുടെ മീറ്റിംഗ് ക്യു.ആർ കോഡ് സ്കാൻ ചെയ്യുക." : "Scan the Secretary's Meeting QR code during weekly roll-call to mark your attendance."}
+                {isMalayalam ? "ലോഗിൻ ചെയ്താൽ മാത്രം ഹാജർ രേഖപ്പെടില്ല. യോഗം സജീവമായിരിക്കുമ്പോൾ സെക്രട്ടറിയുടെ മീറ്റിംഗ് ക്യു.ആർ കോഡ് സ്കാൻ ചെയ്യുക." : "Logging in alone does not mark attendance. Scan the Secretary's Meeting QR while the meeting is active."}
               </p>
               <div className="d-flex gap-2 flex-wrap">
                 <button type="button" className="btn btn-outline-light btn-sm px-3" onClick={speakWelcome}>

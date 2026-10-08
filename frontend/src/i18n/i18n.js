@@ -168,7 +168,7 @@ const resources = {
       repaymentProgress: "Repayment Progress",
       printSanctionSlip: "🖨️ Print Sanction Slip",
       reapplyLoanBtn: "🔄 Re-apply for Loan",
-      printPassbookStatement: "🖨️ Print Passbook Statement",
+      printPassbookStatement: "Print Passbook Statement",
       myPassbookTitle: "My Digital Passbook",
 
       // Programmes & Events
@@ -389,7 +389,7 @@ const resources = {
       repaymentProgress: "തിരിച്ചടവ് പുരോഗതി",
       printSanctionSlip: "🖨️ അനുമതി പത്രം പ്രിന്റ് ചെയ്യുക",
       reapplyLoanBtn: "🔄 വീണ്ടും അപേക്ഷിക്കുക",
-      printPassbookStatement: "🖨️ പാസ്ബുക്ക് സ്റ്റേറ്റ്മെന്റ് പ്രിന്റ് ചെയ്യുക",
+      printPassbookStatement: "പാസ്ബുക്ക് സ്റ്റേറ്റ്മെന്റ് പ്രിന്റ് ചെയ്യുക",
       myPassbookTitle: "എന്റെ ഡിജിറ്റൽ പാസ്ബുക്ക്",
 
       // Programmes & Events

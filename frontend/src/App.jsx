@@ -37,11 +37,13 @@ function AppRoutes() {
   const { user } = useAuth();
   const location = useLocation();
   const isLoginPage = ["/login", "/member-login", "/secretary-login"].includes(location.pathname) || location.pathname.startsWith("/reset-password/");
+  const isRegistrationPage = ["/register", "/register-nhg"].includes(location.pathname);
+  const showAppChrome = !isLoginPage && !isRegistrationPage;
 
   return (
-    <div className={`d-flex flex-column min-vh-100 ${user && !isLoginPage ? "kc-dashboard-shell" : ""}`}>
-      {!isLoginPage && <TopGovBar />}
-      {!isLoginPage && <Navbar />}
+    <div className={`d-flex flex-column min-vh-100 ${user && showAppChrome ? "kc-dashboard-shell" : ""}`}>
+      {showAppChrome && <TopGovBar />}
+      {showAppChrome && <Navbar />}
       <main className="flex-grow-1">
         <Routes>
             {/* Public Entry Routes */}
@@ -207,7 +209,7 @@ function AppRoutes() {
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      {!isLoginPage && <Footer />}
+      {showAppChrome && <Footer />}
     </div>
   );
 }

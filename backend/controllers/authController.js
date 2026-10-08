@@ -45,7 +45,7 @@ const registerUser = async (req, res) => {
     if (name.length < 2 || name.length > 80) return res.status(400).json({ message: "Name must be between 2 and 80 characters." });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: "Enter a valid email address." });
     if (String(password).length < 8) return res.status(400).json({ message: "Password must be at least 8 characters." });
-    if (phoneInput && phoneDigits.length !== 10) return res.status(400).json({ message: "Phone number must contain 10 digits." });
+    if (phoneInput && !/^[6-9]\d{9}$/.test(phoneDigits)) return res.status(400).json({ message: "Enter a 10-digit Indian phone number beginning with 6, 7, 8, or 9." });
 
     const signupRole = String(role).toLowerCase();
     if (!["member", "secretary", "nhg_secretary", "ads_officer", "cds_officer", "ads_cds_officer"].includes(signupRole)) {
@@ -284,6 +284,7 @@ const loginUser = async (req, res) => {
       rawRole: user.role,
       nhgName: resolvedNhgName,
       nhgId: resolvedNhgId,
+      phone: user.phone || "",
       qrCode: user.qrCode || memberId || "",
       memberId: memberId || "",
       token: generateToken(user._id),
@@ -412,4 +413,51 @@ const getProfile = async (req, res) => {
   res.json(req.user);
 };
 
-module.exports = { registerUser, loginUser, getProfile, forgotPassword, resetPassword, resetPasswordWithCode, createDemoBankOfficer };
+// @route PATCH /api/auth/profile
+// The Secretary's current number is also the NHG's public contact number.
+const updateSecretaryProfile = async (req, res) => {
+  try {
+    const role = String(req.user?.role || "").toLowerCase().replace(/[-_\s]/g, "");
+    if (!["secretary", "nhgsecretary"].includes(role)) {
+      return res.status(403).json({ message: "Only an NHG Secretary can update the NHG contact number." });
+    }
+
+    const phone = String(req.body.phone || "").replace(/\D/g, "");
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      return res.status(400).json({ message: "Enter a 10-digit Indian mobile number beginning with 6, 7, 8, or 9." });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: "Secretary account was not found." });
+
+    const NHG = require("../models/NHG");
+    const nhgFilters = [];
+    if (user.nhgId) nhgFilters.push({ nhgId: user.nhgId });
+    if (user.email) nhgFilters.push({ secretaryEmail: user.email.toLowerCase() });
+    const nhg = nhgFilters.length ? await NHG.findOne({ $or: nhgFilters }) : null;
+    if (!nhg) return res.status(404).json({ message: "No NHG is linked to this Secretary account." });
+
+    nhg.secretaryPhone = phone;
+    nhg.secretaryName = user.name;
+    nhg.secretaryEmail = user.email.toLowerCase();
+    await nhg.save();
+
+    user.phone = phone;
+    await user.save();
+
+    return res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      phone: user.phone,
+      nhgName: user.nhgName,
+      nhgId: user.nhgId,
+    });
+  } catch (error) {
+    console.error("Update Secretary contact error:", error);
+    return res.status(500).json({ message: "Could not update the Secretary and NHG contact number." });
+  }
+};
+
+module.exports = { registerUser, loginUser, getProfile, updateSecretaryProfile, forgotPassword, resetPassword, resetPasswordWithCode, createDemoBankOfficer };
