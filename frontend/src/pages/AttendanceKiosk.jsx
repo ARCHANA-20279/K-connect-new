@@ -11,7 +11,7 @@ const AttendanceKiosk = () => {
   const { user } = useAuth();
   const normalizedRole = (user?.role || "").toLowerCase().replace(/[-_]/g, "");
   const isSecretary = normalizedRole === "secretary" || normalizedRole === "nhgsecretary";
-  const isMember = normalizedRole === "member";
+  const isMember = normalizedRole === "member" || normalizedRole === "nhgmember";
 
   // Meetings state
   const [meetings, setMeetings] = useState([]);
@@ -28,6 +28,7 @@ const AttendanceKiosk = () => {
 
   // Scanner state
   const [scannerActive, setScannerActive] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
   const [facingMode, setFacingMode] = useState("environment"); // default rear camera on phones
   const [cameraError, setCameraError] = useState("");
   const [lastScannedText, setLastScannedText] = useState("");
@@ -40,6 +41,7 @@ const AttendanceKiosk = () => {
   // Refs
   const html5QrCodeRef = useRef(null);
   const isStartingRef = useRef(false);
+  const cameraRunIdRef = useRef(0);
   const lastScannedCodeRef = useRef("");
   const lastScannedTimeRef = useRef(0);
   const fileInputRef = useRef(null);
@@ -170,6 +172,7 @@ const AttendanceKiosk = () => {
 
     lastScannedCodeRef.current = trimmed;
     lastScannedTimeRef.current = now;
+
     setProcessing(true);
 
     try {
@@ -303,16 +306,25 @@ const AttendanceKiosk = () => {
 
   // Stop camera helper
   const stopCamera = async () => {
+    cameraRunIdRef.current += 1;
     try {
       if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
         await html5QrCodeRef.current.stop();
-        html5QrCodeRef.current.clear();
       }
     } catch (err) {
       console.log("Stop camera error ignored:", err);
     } finally {
+      // Explicitly release the browser media tracks as well as stopping the QR reader.
+      document.querySelectorAll("#kiosk-reader-box video").forEach((video) => {
+        video.srcObject?.getTracks().forEach((track) => track.stop());
+        video.srcObject = null;
+      });
+      try {
+        html5QrCodeRef.current?.clear();
+      } catch (err) {
+        // The reader may not have finished initializing yet.
+      }
       setScannerActive(false);
-      isStartingRef.current = false;
     }
   };
 
@@ -324,6 +336,7 @@ const AttendanceKiosk = () => {
 
     try {
       await stopCamera();
+      const runId = ++cameraRunIdRef.current;
 
       const scanner = new Html5Qrcode("kiosk-reader-box", {
         verbose: false,
@@ -334,9 +347,9 @@ const AttendanceKiosk = () => {
 
       const config = {
         fps: 15,
-        qrbox: {
-          width: 260,
-          height: 260,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.85);
+          return { width: edge, height: edge };
         },
       };
 
@@ -363,11 +376,22 @@ const AttendanceKiosk = () => {
         );
       }
 
+      // If the user navigated away, hid the tab, or turned the camera off while
+      // permission/startup was pending, release it immediately after startup.
+      if (runId !== cameraRunIdRef.current || document.hidden) {
+        try { await scanner.stop(); } catch (err) { /* already stopped */ }
+        document.querySelectorAll("#kiosk-reader-box video").forEach((video) => {
+          video.srcObject?.getTracks().forEach((track) => track.stop());
+          video.srcObject = null;
+        });
+        return;
+      }
+
       setScannerActive(true);
     } catch (err) {
       console.error("Camera start failed:", err);
       setCameraError(
-        "Camera not accessible or permission denied. You can scan by uploading a photo of the QR code using the button below."
+        "Camera access was blocked or unavailable. Allow camera access in your browser prompt or site settings, then try again. You can also upload a QR photo below."
       );
       setScannerActive(false);
     } finally {
@@ -381,9 +405,10 @@ const AttendanceKiosk = () => {
     setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
   };
 
-  // Manage camera lifecycle based on viewMode
+  // Camera permission is requested only after the user chooses Enable camera.
+  // Leaving this page or hiding its browser tab always releases the camera.
   useEffect(() => {
-    if (viewMode === "scanner") {
+    if (viewMode === "scanner" && cameraEnabled) {
       const timer = setTimeout(() => {
         startCamera();
       }, 250);
@@ -395,7 +420,19 @@ const AttendanceKiosk = () => {
     } else {
       stopCamera();
     }
-  }, [facingMode, viewMode]);
+  }, [cameraEnabled, facingMode, viewMode]);
+
+  useEffect(() => {
+    const stopWhenHidden = () => {
+      if (document.hidden) setCameraEnabled(false);
+    };
+    document.addEventListener("visibilitychange", stopWhenHidden);
+    window.addEventListener("pagehide", stopWhenHidden);
+    return () => {
+      document.removeEventListener("visibilitychange", stopWhenHidden);
+      window.removeEventListener("pagehide", stopWhenHidden);
+    };
+  }, []);
 
   // Download Meeting QR code as high-res PNG image
   const handleDownloadQR = () => {
@@ -642,9 +679,10 @@ const AttendanceKiosk = () => {
                       <QRCodeCanvas
                         id="meeting-qr-canvas"
                         value={meetingData?.qrData || ""}
-                        size={220}
-                        level="H"
+                        size={300}
+                        level="M"
                         includeMargin={true}
+                        style={{ maxWidth: "100%", height: "auto" }}
                       />
                       <div className="mt-2 text-center font-monospace small text-muted">
                         Token: {currentMeeting.attendanceToken?.substring(0, 16) || "Active"}...
@@ -682,20 +720,47 @@ const AttendanceKiosk = () => {
             {viewMode === "scanner" && (
               <div>
                 <div className="alert alert-info py-2 small mb-3">
-                  📱 <strong>Member Instructions:</strong> Signing in alone does not record attendance.
-                  Scan the Secretary's active Meeting QR code; completed or cancelled meetings cannot accept scans.
+                  {isSecretary ? (
+                    <>📷 <strong>Secretary camera test:</strong> Attendance is recorded only when the signed-in account is linked to an active Member profile.</>
+                  ) : (
+                    <>📱 <strong>Member Instructions:</strong> Signing in alone does not record attendance. Scan the Secretary's active Meeting QR code; completed or cancelled meetings cannot accept scans.</>
+                  )}
+                </div>
+
+                <div className="d-flex align-items-center justify-content-between gap-3 mb-3 flex-wrap">
+                  <span className="small text-muted">
+                    {scannerActive
+                      ? "Camera is on. It will turn off when you leave this page."
+                      : "Allow camera access to scan the meeting QR code."}
+                  </span>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${cameraEnabled ? "btn-outline-danger" : "btn-primary"}`}
+                    onClick={() => {
+                      setCameraError("");
+                      setCameraEnabled((enabled) => !enabled);
+                    }}
+                  >
+                    {cameraEnabled ? "Turn Camera Off" : "Enable Camera"}
+                  </button>
                 </div>
 
                 <div
                   id="kiosk-reader-box"
                   style={{
                     width: "100%",
-                    minHeight: "300px",
+                    minHeight: cameraEnabled ? "300px" : "120px",
                     backgroundColor: "#0f172a",
                     borderRadius: "12px",
                     overflow: "hidden",
                   }}
-                ></div>
+                >
+                  {!cameraEnabled && (
+                    <div className="h-100 d-flex align-items-center justify-content-center text-white-50 small" style={{ minHeight: "120px" }}>
+                      Camera is off
+                    </div>
+                  )}
+                </div>
 
                 {cameraError && (
                   <div className="alert alert-warning mt-3 py-2 small">

@@ -15,6 +15,9 @@ const normalizeRole = (role) => {
         "secretary": "nhg_secretary",
 
         "member": "member",
+        "nhg_member": "member",
+        "nhg-member": "member",
+        "nhgmember": "member",
 
         "ads_cds_officer": "ads_cds_officer",
         "ads-cds-officer": "ads_cds_officer",

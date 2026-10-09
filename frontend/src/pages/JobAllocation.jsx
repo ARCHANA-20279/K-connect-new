@@ -130,6 +130,7 @@ const JobAllocation = () => {
               <div className="flex-grow-1">{job.projectName && <div className="small text-uppercase fw-bold text-primary mb-1">Project: {job.projectName}</div>}<div className="d-flex flex-wrap align-items-center gap-2 mb-2"><h4 className="mb-0">{job.taskName}</h4><span className={`badge text-bg-${statusColor[job.status] || "secondary"}`}>{job.status}</span><span className="badge bg-light text-dark border">{job.category}</span></div>
                 <p className="mb-2">{job.description || "Community assignment from the NHG Secretary."}</p>
                 <div className="small text-muted">Assigned to <strong>{job.assignedMemberName}</strong> ({job.assignedMemberId}) · Due {job.deadline} · Remuneration ₹{Number(job.stipendAmount || 0).toLocaleString()}</div>
+                {isMember && job.status === "Completed" && <div className="alert alert-success py-2 mt-3 mb-0" role="status"><strong>Project successfully submitted!</strong> Your payment request of ₹{Number(job.stipendAmount || 0).toLocaleString("en-IN")} for {job.taskName} has been sent to your NHG Secretary for confirmation. Payment can be processed after confirmation.</div>}
                 {job.status === "Not Interested" && <div className="alert alert-danger py-2 mt-3 mb-0"><strong>{job.assignedMemberName} declined:</strong> {job.declineReason}</div>}
               </div>
               {isMember && <div className="d-flex flex-wrap align-items-start gap-2">

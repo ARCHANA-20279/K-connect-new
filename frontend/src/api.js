@@ -6,10 +6,14 @@ const api = axios.create({
 
 // Attach JWT token to every request if the user is logged in
 api.interceptors.request.use((config) => {
-  const stored = localStorage.getItem("kconnect_user");
+  const stored = sessionStorage.getItem("kconnect_user");
   if (stored) {
-    const { token } = JSON.parse(stored);
-    if (token) config.headers.Authorization = `Bearer ${token}`;
+    try {
+      const { token } = JSON.parse(stored);
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+    } catch {
+      sessionStorage.removeItem("kconnect_user");
+    }
   }
   return config;
 });

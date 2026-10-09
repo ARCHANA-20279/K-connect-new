@@ -269,7 +269,7 @@ const Dashboard = () => {
     if (!isMember) return undefined;
     let storedUser;
     try {
-      storedUser = JSON.parse(localStorage.getItem("kconnect_user") || "null");
+      storedUser = JSON.parse(sessionStorage.getItem("kconnect_user") || "null");
     } catch {
       storedUser = null;
     }

@@ -15,6 +15,47 @@ const sameNhg = (user, loan) => Boolean(
   (user?.nhgId && loan.nhgId === user.nhgId) ||
   (user?.nhgName && loan.nhgName === user.nhgName)
 );
+const getAdsReviewArea = async (user) => {
+  let assignedNhg = user?.nhgId ? await NHG.findOne({ nhgId: user.nhgId }) : null;
+  if (!assignedNhg && user?.nhgName) {
+    const escapedName = user.nhgName.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assignedNhg = await NHG.findOne({ name: { $regex: `^${escapedName}$`, $options: "i" } });
+  }
+  if (!assignedNhg) return { ids: [], names: [] };
+
+  // ADS accounts link to one NHG at registration, but their queue covers the
+  // ward's NHGs. Match the shared ADS name or ward within the same local body
+  // so inconsistent ADS labels don't hide secretary-forwarded applications.
+  const locality = {};
+  if (assignedNhg.district?.trim()) locality.district = assignedNhg.district.trim();
+  if (assignedNhg.localBodyType) locality.localBodyType = assignedNhg.localBodyType;
+  if (assignedNhg.localBodyName?.trim()) locality.localBodyName = assignedNhg.localBodyName.trim();
+  const areaClauses = [];
+  if (assignedNhg.adsName?.trim()) {
+    const escapedAdsName = assignedNhg.adsName.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    areaClauses.push({ ...locality, adsName: { $regex: `^${escapedAdsName}$`, $options: "i" } });
+  }
+  if (assignedNhg.ward?.trim()) areaClauses.push({ ...locality, ward: assignedNhg.ward.trim() });
+  areaClauses.push({ _id: assignedNhg._id });
+  const areaNhgs = await NHG.find({ $or: areaClauses }).select("nhgId name");
+  const ids = areaNhgs.map((nhg) => nhg.nhgId).filter(Boolean);
+  const names = areaNhgs.map((nhg) => nhg.name).filter(Boolean);
+  return ids.length || names.length ? { ids, names } : { ids: [assignedNhg.nhgId].filter(Boolean), names: [assignedNhg.name].filter(Boolean) };
+};
+const loansInAdsAreaFilter = async (user) => {
+  const fallbackFilter = nhgFilterFor(user);
+  if (!fallbackFilter) return null;
+  const area = await getAdsReviewArea(user);
+  const areaClauses = [
+    ...(area.ids.length ? [{ nhgId: { $in: area.ids } }] : []),
+    ...(area.names.length ? [{ nhgName: { $in: area.names } }] : []),
+  ];
+  const memberFilter = areaClauses.length ? { $or: areaClauses } : fallbackFilter;
+  const membersInArea = await Member.find(memberFilter).select("memberId");
+  const memberIds = membersInArea.map((member) => member.memberId);
+  const loanClauses = [...areaClauses, ...(memberIds.length ? [{ memberId: { $in: memberIds } }] : [])];
+  return loanClauses.length ? { $or: loanClauses } : fallbackFilter;
+};
 const nhgFilterFor = (user) => {
   const conditions = [];
   if (user?.nhgId) conditions.push({ nhgId: user.nhgId });
@@ -167,6 +208,25 @@ const castPeerVote = async (req, res) => {
       finalized = result.modifiedCount > 0;
     }
     const current = finalized ? await Loan.findById(updated._id) : updated;
+    if (finalized && current.status === "Pending") {
+      try {
+        await Notification.create({
+          title: `Loan ready for Secretary review: ${current.memberName}`,
+          message: `${current.memberName}'s loan request ${current.loanId} for ₹${Number(current.amount).toLocaleString("en-IN")} has received NHG member approval and is waiting for your review.`,
+          type: "LOAN",
+          recipientRole: "secretary",
+          targetAudience: `NHG Secretary${current.nhgName ? ` — ${current.nhgName}` : ""}`,
+          category: "NHG Secretary Loan Review",
+          createdBy: req.user?.name || "NHG Members",
+          nhgName: current.nhgName,
+          nhgId: current.nhgId,
+          relatedLoan: current._id,
+        });
+      } catch (notificationError) {
+        // The peer vote remains successful even if notification storage is temporarily unavailable.
+        console.warn("Could not create NHG Secretary loan notification:", notificationError.message);
+      }
+    }
     req.app.get("io")?.to(`nhg:${current.nhgId || current.nhgName}`).emit("loan:vote-update", { loanId: current._id, status: current.status, approvals, rejections, requiredApprovals: current.peerApproval.requiredApprovals, totalVoters: current.peerApproval.eligibleVoterIds.length });
     res.json({ message: "Your NHG vote has been recorded.", loan: current });
   } catch (error) {
@@ -194,13 +254,18 @@ const getAllLoans = async (req, res) => {
         { memberId: user.memberId || "__unlinked_member__" },
         ...(group.length ? [{ status: "NHG Voting", peerApproval: { $exists: true }, $or: group }] : []),
       ] };
+    } else if (isAds(role) && req.query.scope === "ads") {
+      // The dedicated ADS desk is the workflow handoff queue. NHG-level
+      // metadata can be inconsistent across older records, so the current
+      // review stage is the authoritative assignment for these applications.
+      query = { status: "ADS Review" };
     } else if (isCds(role)) {
       // CDS reviews applications forwarded from ADS across all constituent NHGs.
       query = {};
     } else if (isBankOfficer(role)) {
       query.status = { $in: ["Bank Review", "Bank Approved"] };
     } else if (isAds(role)) {
-      const filter = nhgFilterFor(user);
+      const filter = await loansInAdsAreaFilter(user);
       if (!filter) return res.status(403).json({ message: "Your ADS/CDS account must be linked to its review area." });
       query = filter;
     } else if (isMainAdmin(role)) {
@@ -224,7 +289,8 @@ const getLoanById = async (req, res) => {
     const role = roleOf(user);
     if (role === "member" && loan.memberId !== user.memberId) return res.status(403).json({ message: "You can only view your own loan applications." });
     if (isBankOfficer(role) && !["Bank Review", "Bank Approved"].includes(loan.status)) return res.status(403).json({ message: "Demo Bank Officers can only view applications forwarded to the bank stage." });
-    if ((isSecretary(role) || (isAds(role) && !isCds(role))) && !canReviewNhgLoan(user, loan)) return res.status(403).json({ message: "This loan is outside your assigned review area." });
+    if (isSecretary(role) && !canReviewNhgLoan(user, loan)) return res.status(403).json({ message: "This loan is outside your assigned review area." });
+    if (isAds(role) && !isCds(role) && loan.status !== "ADS Review") return res.status(403).json({ message: "This loan is not waiting in the ADS review queue." });
     res.status(200).json(loan);
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch loan", error: error.message });
@@ -275,7 +341,6 @@ const approveAtLevel = (level) => async (req, res) => {
   try {
     const loan = await Loan.findById(req.params.id);
     if (!loan) return res.status(404).json({ message: "Loan not found" });
-    if (level === "ADS" && !sameNhg(req.user, loan)) return res.status(403).json({ message: "This loan is outside your assigned review area." });
     const expectedStatus = level === "ADS" ? "ADS Review" : "CDS Review";
     if (loan.status !== expectedStatus) return res.status(400).json({ message: `This loan is not awaiting ${level} review.` });
     const thriftTotal = await getRecordedThriftTotal(loan.memberId);
@@ -388,11 +453,11 @@ const rejectLoan = async (req, res) => {
     const role = roleOf(req.user);
     const stageForStatus = { Pending: "NHG Secretary", "ADS Review": "ADS", "CDS Review": "CDS", "Bank Review": "Bank" };
     const expectedStage = stageForStatus[loan.status];
-    const permitted = expectedStage === "NHG Secretary" ? isSecretary(role) && canReviewNhgLoan(req.user, loan)
-      : expectedStage === "ADS" ? isAds(role) && sameNhg(req.user, loan)
-      : expectedStage === "CDS" ? isCds(role)
-      : expectedStage === "Bank" ? isMainAdmin(role) || isBankOfficer(role)
-      : false;
+    let permitted = false;
+    if (expectedStage === "NHG Secretary") permitted = isSecretary(role) && canReviewNhgLoan(req.user, loan);
+    else if (expectedStage === "ADS") permitted = isAds(role);
+    else if (expectedStage === "CDS") permitted = isCds(role);
+    else if (expectedStage === "Bank") permitted = isMainAdmin(role) || isBankOfficer(role);
     if (!permitted) return res.status(403).json({ message: "You cannot reject this application at its current stage." });
     if (!req.body.reason?.trim()) return res.status(400).json({ message: "Enter a reason for declining this application." });
     loan.status = "Rejected";

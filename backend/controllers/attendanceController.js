@@ -4,7 +4,8 @@ const Meeting = require("../models/Meeting");
 const { calculateCreditScore } = require("../services/creditScoreService");
 const { randomBytes } = require("crypto");
 
-const createAttendanceToken = () => `KCMTG-${randomBytes(32).toString("hex")}`;
+// A 128-bit one-time meeting secret keeps the QR compact while remaining unpredictable.
+const createAttendanceToken = () => randomBytes(16).toString("hex");
 
 // ==========================================
 // 1. MEMBER SCANS MEETING QR CODE (NEW WORKFLOW)
@@ -17,28 +18,36 @@ const scanMeetingAttendance = async (req, res) => {
         message: "Authentication required to mark attendance.",
       });
     }
-    if ((user.role || "").toLowerCase() !== "member") {
-      return res.status(403).json({
-        message: "Sign in with your separate Member account to mark your own attendance.",
-      });
-    }
+    const role = String(user.role || "").toLowerCase().replace(/[-_\s]/g, "");
+    const hasMemberRole = ["member", "nhgmember"].includes(role);
 
     // 1. Identify member from req.user (Logged-in member identity)
     let member = null;
     if (user.memberId) {
       member = await Member.findOne({ memberId: user.memberId });
+      if (member?.email && user.email && member.email.toLowerCase() !== user.email.toLowerCase()) member = null;
     }
     if (!member && user.email) {
-      member = await Member.findOne({ email: user.email });
+      member = await Member.findOne({ email: user.email.toLowerCase() });
     }
-    if (!member && user.name) {
+
+    // Some existing accounts have a legacy/incorrect role value. Trust a
+    // non-member role only when this exact login email is linked to an active
+    // NHG member record; never infer membership from a matching name alone.
+    if (!hasMemberRole && (!member || member.status !== "Active" || !user.email || member.email?.toLowerCase() !== user.email.toLowerCase())) {
+      return res.status(403).json({
+        message: "This login is not linked to an active Member profile. Sign in with the Member account registered under that member’s email.",
+      });
+    }
+
+    if (!member && hasMemberRole && user.name) {
       member = await Member.findOne({
         name: { $regex: new RegExp(`^${user.name}$`, "i") },
       });
     }
 
     if (!member) {
-      if (user.memberId) {
+      if (hasMemberRole && user.memberId) {
         member = {
           memberId: user.memberId,
           name: user.name,
@@ -54,9 +63,9 @@ const scanMeetingAttendance = async (req, res) => {
     }
 
     // Check whether member is active
-    if (member.status === "Inactive") {
+    if (member.status !== "Active") {
       return res.status(400).json({
-        message: "Your member profile is inactive. Please contact the Secretary.",
+        message: "Your member profile is not active yet. Please ask the Secretary to approve it before scanning.",
       });
     }
 
@@ -219,22 +228,16 @@ const getMeetingAttendance = async (req, res) => {
       return res.status(403).json({ message: "This meeting belongs to a different NHG." });
     }
 
-    // Ensure meeting has an attendanceToken
-    if (!meeting.attendanceToken) {
+    // Ensure the meeting has a compact token; rotate longer legacy tokens to
+    // keep the QR easy to decode on phone cameras.
+    if (!/^[a-f0-9]{32}$/i.test(meeting.attendanceToken || "")) {
       meeting.attendanceToken = createAttendanceToken();
       await meeting.save();
     }
 
-    // Construct meeting QR payload
-    const qrPayload = {
-      type: "K_CONNECT_MEETING_QR",
-      meetingId: meeting._id.toString(),
-      token: meeting.attendanceToken,
-      meetingNumber: meeting.meetingNumber,
-      title: meeting.title,
-      date: meeting.date,
-      time: meeting.time,
-    };
+    // Keep the QR payload compact so phone cameras can decode it reliably.
+    // The scanner accepts this KCMTG:<meetingId>:<token> format.
+    const qrPayload = `KCMTG:${meeting._id.toString()}:${meeting.attendanceToken}`;
 
     // Get all active members belonging to this meeting's NHG
     const memberFilter = { status: "Active" };
@@ -281,7 +284,7 @@ const getMeetingAttendance = async (req, res) => {
 
     return res.status(200).json({
       meeting: meetingResponse,
-      qrData: isSecretary || isPlatformAdmin ? JSON.stringify(qrPayload) : null,
+      qrData: isSecretary || isPlatformAdmin ? qrPayload : null,
       totalMembers: activeMembers.length,
       presentCount: presentRecords.length,
       absentCount: absentMembers.length,

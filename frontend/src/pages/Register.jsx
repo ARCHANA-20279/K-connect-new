@@ -141,6 +141,12 @@ const Register = () => {
                 ? "നിങ്ങളുടെ വിവരങ്ങൾ നൽകി അക്കൗണ്ട് സൃഷ്ടിക്കുക"
                 : "Enter your details to create your Kudumbashree account"}
             </p>
+            <p className="small mt-2 mb-0">
+              {isMl ? "പുതിയ അയൽക്കൂട്ടം രജിസ്റ്റർ ചെയ്യണോ?" : "Registering a new NHG?"}{" "}
+              <Link to="/register-nhg" className="fw-bold text-success text-decoration-none">
+                {isMl ? "NHG രജിസ്റ്റർ ചെയ്യുക" : "Register an NHG"}
+              </Link>
+            </p>
           </div>
 
           {error && <div className="alert alert-danger py-2 small mb-3" role="alert">{error}</div>}
@@ -247,7 +253,7 @@ const Register = () => {
           </form>
           )}
 
-          <p className="text-center small text-muted mb-0">
+          <p className="text-center small text-muted mt-2 mb-0">
             {t("alreadyHaveAccount")}{" "}
             <Link to="/login" className="fw-bold text-primary text-decoration-none">
               {t("login")}

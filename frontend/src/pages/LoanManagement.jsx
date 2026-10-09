@@ -43,6 +43,7 @@ const LoanManagement = () => {
   const [memberThriftAmount, setMemberThriftAmount] = useState(null);
   const [memberCreditScore, setMemberCreditScore] = useState(null);
   const [maximumLoanAmount, setMaximumLoanAmount] = useState(null);
+  const [expandedVoteLoanId, setExpandedVoteLoanId] = useState(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -82,7 +83,7 @@ const LoanManagement = () => {
     try {
       setLoading(true);
       const [loansRes, membersRes] = await Promise.all([
-        api.get("/loans"),
+        api.get(isAdsWorkspace ? "/loans?scope=ads" : "/loans"),
         (isSecretary || isMainAdmin) ? api.get("/members") : Promise.resolve({ data: { members: [] } }),
       ]);
 
@@ -150,8 +151,10 @@ const LoanManagement = () => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    // Auth is restored asynchronously. Reload when the role becomes available so
+    // an ADS account requests the ADS-scoped queue instead of a stale generic one.
+    if (user?.token) fetchData();
+  }, [user?.token, isAdsWorkspace, isSecretary, isMainAdmin, isMember]);
 
   useEffect(() => {
     if (!isSecretary) return undefined;
@@ -170,7 +173,7 @@ const LoanManagement = () => {
   useEffect(() => {
     if (!isMember) return undefined;
     let storedUser;
-    try { storedUser = JSON.parse(localStorage.getItem("kconnect_user") || "null"); } catch { storedUser = null; }
+    try { storedUser = JSON.parse(sessionStorage.getItem("kconnect_user") || "null"); } catch { storedUser = null; }
     if (!storedUser?.token) return undefined;
     const socket = io("http://localhost:5000", { auth: { token: storedUser.token }, transports: ["websocket", "polling"] });
     socket.on("loan:vote-request", fetchData);
@@ -193,7 +196,7 @@ const LoanManagement = () => {
       try {
         const [notificationRes, loansRes] = await Promise.all([
           api.get("/notifications?type=LOAN"),
-          api.get("/loans"),
+          api.get("/loans?scope=ads"),
         ]);
         setAdsNotifications(notificationRes.data.notifications || []);
         setLoans(Array.isArray(loansRes.data) ? loansRes.data : []);
@@ -447,6 +450,9 @@ const LoanManagement = () => {
     const lastStage = loan.workflowHistory?.[loan.workflowHistory.length - 1]?.stage;
     return ({ Member: 0, "NHG Peer Vote": 1, "NHG Secretary": 2, ADS: 3, CDS: 4, Bank: 5, "Repayment verification": 6 })[lastStage] ?? 1;
   };
+  const memberApplications = loans
+    .filter((loan) => loan.memberId && loan.memberId.toLowerCase() === String(selectedMemberId || "").toLowerCase())
+    .sort((a, b) => new Date(b.applicationDate || b.createdAt || 0) - new Date(a.applicationDate || a.createdAt || 0));
   const rejectionStageLabel = (loan) => {
     const stage = loan.workflowHistory?.[loan.workflowHistory.length - 1]?.stage;
     const labels = isMl
@@ -460,14 +466,25 @@ const LoanManagement = () => {
     "CDS Review": "CDS",
     "Bank Review": isMl ? "ഡെമോ ബാങ്ക്" : "Demo Bank",
   })[status] || (isMl ? "പരിശോധനാ സമിതി" : "Review committee");
+  // The compact overview has six stages (it combines NHG voting and
+  // Secretary review), so give it its own zero-based progress mapping.
+  const overviewWorkflowStep = (loan) => {
+    if (loan.status === "Rejected") {
+      const lastStage = loan.workflowHistory?.[loan.workflowHistory.length - 1]?.stage;
+      return ({ Member: 0, "NHG Peer Vote": 1, "NHG Secretary": 1, ADS: 2, CDS: 3, Bank: 4, "Repayment verification": 5 })[lastStage] ?? 1;
+    }
+    return ({ "NHG Voting": 1, Pending: 1, "ADS Review": 2, "CDS Review": 3, "Bank Review": 4, "Bank Approved": 4, Repayment: 5, Approved: 5, Completed: 6 })[loan.status] ?? 0;
+  };
   const overviewStageClass = (index) => {
     if (index === 0) return "border-success bg-success-subtle text-success-emphasis";
-    const rejectedAtStage = loans.some((loan) => loan.status === "Rejected" && workflowStep(loan) === index);
+    const application = memberApplications[0];
+    if (!application) return "border-secondary-subtle bg-light text-secondary";
+    const step = overviewWorkflowStep(application);
+    const rejectedAtStage = application.status === "Rejected" && step === index;
     if (rejectedAtStage) return "border-danger bg-danger-subtle text-danger";
-    const activeAtStage = loans.some((loan) => !["Rejected", "Completed"].includes(loan.status) && workflowStep(loan) === index);
+    const activeAtStage = !["Rejected", "Completed"].includes(application.status) && step === index;
     if (activeAtStage) return "border-warning bg-warning-subtle text-dark";
-    const allPastStage = loans.length > 0 && loans.every((loan) => loan.status === "Completed" || (loan.status !== "Rejected" && workflowStep(loan) > index) || (loan.status === "Rejected" && workflowStep(loan) > index));
-    return allPastStage ? "border-success bg-success-subtle text-success-emphasis" : "border-secondary-subtle bg-light text-secondary";
+    return step > index ? "border-success bg-success-subtle text-success-emphasis" : "border-secondary-subtle bg-light text-secondary";
   };
 
   // Filtered loans for Member View
@@ -552,7 +569,7 @@ const LoanManagement = () => {
 
         {isMember && <section className="portal-card mb-4 p-3 p-lg-4">
           <div className="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
-            <div><h2 className="h5 fw-bold mb-1">{isMl ? "വായ്പയുടെ പരിശോധനാ ക്രമം" : "Loan review and repayment path"}</h2><p className="small text-muted mb-0">{isMl ? "ഓരോ ഘട്ടവും തീയതിയും റഫറൻസും സഹിതം രേഖപ്പെടുത്തും." : "Each hand-off is recorded with its date and reference."}</p></div>
+            <div><h2 className="h5 fw-bold mb-1">{isMl ? "വായ്പയുടെ പരിശോധനാ ക്രമം" : "Loan review and repayment path"}</h2><p className="small text-muted mb-0">{isMl ? "ഓരോ ഘട്ടവും തീയതിയും റഫറൻസും സഹിതം രേഖപ്പെടുത്തും." : "Each hand-off is recorded with its date and reference."}{memberApplications[0]?.loanId ? ` · ${isMl ? "ഏറ്റവും പുതിയ അപേക്ഷ" : "Most recent application"}: ${memberApplications[0].loanId}` : ""}</p></div>
             <span className="badge text-bg-light border">{isMl ? "അപേക്ഷ മുതൽ ഇ.എം.ഐ വരെ" : "Application to EMI"}</span>
           </div>
           <div className="row g-2 text-center">
@@ -786,20 +803,55 @@ const LoanManagement = () => {
                             {loan.workflowHistory.slice(-5).map((entry, index) => <div key={`${entry.at}-${index}`}>• {entry.stage}: {entry.decision}{entry.reference ? ` (${entry.reference})` : ""} — {entry.actor}</div>)}
                           </div>}
                         </div>
-                        {loan.peerApproval?.eligibleVoterIds?.length > 0 && <div className={`alert ${loan.status === "NHG Voting" ? "alert-info" : "alert-light border"} d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2`}>
+                        {loan.peerApproval?.eligibleVoterIds?.length > 0 && <div className={`alert ${loan.status === "NHG Voting" ? "alert-info" : "alert-light border"} d-flex flex-column gap-2`}>
+                          <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
                           <div>
                             <strong>{isMl ? "അയൽക്കൂട്ടത്തിന്റെ അംഗീകാരം" : "NHG peer approval"}</strong>
                             <div className="small">{isMl ? `${loan.peerApproval.votes?.filter((vote) => vote.decision === "Approve").length || 0}/${loan.peerApproval.requiredApprovals} അംഗീകാരങ്ങൾ · ${loan.peerApproval.votes?.length || 0}/${loan.peerApproval.eligibleVoterIds.length} വോട്ടുകൾ` : `${loan.peerApproval.votes?.filter((vote) => vote.decision === "Approve").length || 0}/${loan.peerApproval.requiredApprovals} approvals · ${loan.peerApproval.votes?.length || 0}/${loan.peerApproval.eligibleVoterIds.length} votes`}</div>
                             {isMember && loan.memberId !== selectedMemberId && <div className="small text-muted">{isMl ? `${loan.memberName} സമർപ്പിച്ച അപേക്ഷ` : `Requested by ${loan.memberName}`}</div>}
                           </div>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary align-self-start"
+                            aria-expanded={expandedVoteLoanId === loan._id}
+                            onClick={() => setExpandedVoteLoanId((current) => current === loan._id ? null : loan._id)}
+                          >
+                            {expandedVoteLoanId === loan._id
+                              ? (isMl ? "വോട്ടർമാരെ മറയ്ക്കുക" : "Hide voters")
+                              : (isMl ? `വോട്ട് ചെയ്തവർ (${loan.peerApproval.votes?.length || 0})` : `View voters (${loan.peerApproval.votes?.length || 0})`)}
+                          </button>
                           {isMember && loan.status === "NHG Voting" && loan.memberId !== selectedMemberId && loan.peerApproval.eligibleVoterIds.includes(selectedMemberId) && !loan.peerApproval.votes?.some((vote) => vote.memberId === selectedMemberId) && <div className="d-flex gap-2">
                             <button className="btn btn-sm btn-success" onClick={() => castPeerVote(loan, "Approve")}>{isMl ? "അംഗീകരിക്കുക" : "Approve"}</button>
                             <button className="btn btn-sm btn-outline-danger" onClick={() => castPeerVote(loan, "Reject")}>{isMl ? "നിരസിക്കുക" : "Reject"}</button>
                           </div>}
                           {loan.peerApproval.votes?.some((vote) => vote.memberId === selectedMemberId) && <span className="badge text-bg-secondary">{isMl ? "നിങ്ങളുടെ വോട്ട് രേഖപ്പെടുത്തി" : "Your vote recorded"}</span>}
+                          </div>
+                          {expandedVoteLoanId === loan._id && (
+                            <div className="rounded-2 border bg-white p-2" aria-live="polite">
+                              <strong className="small d-block mb-2">{isMl ? "വോട്ട് രേഖപ്പെടുത്തിയ അംഗങ്ങൾ" : "Members who voted"}</strong>
+                              {loan.peerApproval.votes?.length ? (
+                                <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
+                                  {loan.peerApproval.votes.map((vote) => (
+                                    <li key={vote.memberId} className="d-flex justify-content-between align-items-center gap-2 small">
+                                      <span>{vote.memberName || vote.memberId} <span className="text-muted">({vote.memberId})</span></span>
+                                      <span className={`badge ${vote.decision === "Approve" ? "text-bg-success" : "text-bg-danger"}`}>
+                                        {vote.decision === "Approve" ? (isMl ? "അംഗീകരിച്ചു" : "Approved") : (isMl ? "നിരസിച്ചു" : "Rejected")}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <span className="small text-muted">{isMl ? "ഇതുവരെ ആരും വോട്ട് ചെയ്തിട്ടില്ല." : "No members have voted yet."}</span>
+                              )}
+                            </div>
+                          )}
                         </div>}
                         {loan.status === "Bank Review" && <div className="alert alert-warning border-warning" role="status"><strong>{isMl ? "സി.ഡി.എസ് പരിശോധന പൂർത്തിയായി" : "CDS review complete"}</strong> {isMl ? "നിങ്ങളുടെ അപേക്ഷ ഡെമോ ബാങ്ക് തീരുമാനത്തിനായി അയച്ചു." : "Your application has been forwarded for a demo bank decision."}</div>}
                         {loan.status === "Bank Approved" && <div className="alert alert-success border-success" role="status"><strong>{isMl ? "ഡെമോ ബാങ്ക് വായ്പ അംഗീകരിച്ചു" : "Demo bank approval recorded"}</strong> {isMl ? `₹${Number(loan.approvedAmount).toLocaleString()} അംഗീകരിച്ചു. ഡെമോ വിതരണം രേഖപ്പെടുത്തുന്നതുവരെ ഇ.എം.ഐ ആരംഭിക്കില്ല. യഥാർത്ഥ പണമിടപാട് നടന്നിട്ടില്ല.` : `₹${Number(loan.approvedAmount).toLocaleString()} was approved. EMI starts only after the demo disbursement is recorded. No real funds were transferred.`}{loan.bankDecision?.reference ? <span className="d-block small mt-1">{isMl ? "ഡെമോ റഫറൻസ്:" : "Demo reference:"} {loan.bankDecision.reference}</span> : null}</div>}
+                        {isMember && loan.status === "Bank Approved" && <div className="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2" role="status">
+                          <span>{isMl ? "ഇ.എം.ഐ തിരിച്ചടവ് തുടങ്ങാൻ ബാങ്ക് ഉദ്യോഗസ്ഥൻ വിതരണം രേഖപ്പെടുത്തണം. അതിന് ശേഷം പേയ്മെന്റ് ഓപ്ഷൻ ലഭിക്കും." : "The bank officer must record disbursement before EMI repayment can start. The payment option will appear after that."}</span>
+                          <button className="btn btn-success btn-sm" type="button" disabled>{isMl ? "വിതരണത്തിന് ശേഷം ഇ.എം.ഐ അടയ്ക്കുക" : "EMI payment available after disbursement"}</button>
+                        </div>}
                         {/* CASE 1: PENDING APPROVAL */}
                         {loan.status === "Pending" && (
                           <div>
@@ -1118,6 +1170,11 @@ const LoanManagement = () => {
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-3">
+                  {isMember && maximumLoanAmount !== null && maximumLoanAmount <= 0 && (
+                    <div className="alert alert-warning small" role="status">
+                      Your current maximum request is ₹0 because no eligible thrift savings are recorded yet. Ask your NHG Secretary to record your savings, check them in <Link to="/thrift" className="alert-link">My Passbook</Link>, then return here and refresh the page. Submit stays disabled until an eligible amount is available.
+                    </div>
+                  )}
                   <div className="row g-3 mb-3">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold small">{t("memberIdLabel")} *</label>

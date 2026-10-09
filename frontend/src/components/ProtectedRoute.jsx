@@ -5,7 +5,7 @@ const normalize = (r) => {
   const s = (r || "").toLowerCase().replace(/[-_]/g, "");
   if (s === "mainadmin" || s === "superadmin") return "main_admin";
   if (s === "nhgsecretary" || s === "secretary") return "nhg_secretary";
-  if (s === "member") return "member";
+  if (s === "member" || s === "nhgmember") return "member";
   return s;
 };
 

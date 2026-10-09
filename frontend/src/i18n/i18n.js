@@ -144,7 +144,7 @@ const resources = {
       // Loan Management
       loansHeroTitle: "Micro-Loan & Credit Management",
       loansHeroSubtitle: "Track each loan from member application through NHG, ADS, CDS, bank decision, and EMI repayment.",
-      applyLoanBtn: "➕ Apply for Loan",
+      applyLoanBtn: "Apply for Loan",
       sanctionBtn: "✓ Approve Loan",
       rejectBtn: "✕ Reject",
       repaymentBtn: "💳 Record Repayment",
@@ -365,7 +365,7 @@ const resources = {
       // Loan Management
       loansHeroTitle: "ലഘുവായ്പ നിർവ്വഹണം",
       loansHeroSubtitle: "അംഗത്തിന്റെ അപേക്ഷ മുതൽ എൻ.എച്ച്.ജി, എ.ഡി.എസ്, സി.ഡി.എസ്, ബാങ്ക് തീരുമാനം, ഇ.എം.ഐ തിരിച്ചടവ് വരെ ഓരോ ഘട്ടവും ട്രാക്ക് ചെയ്യുക.",
-      applyLoanBtn: "➕ വായ്പയ്ക്ക് അപേക്ഷിക്കുക",
+      applyLoanBtn: "വായ്പയ്ക്ക് അപേക്ഷിക്കുക",
       sanctionBtn: "✓ വായ്പ അനുവദിക്കുക",
       rejectBtn: "✕ നിരസിക്കുക",
       repaymentBtn: "💳 തിരിച്ചടവ് രേഖപ്പെടുത്തുക",
