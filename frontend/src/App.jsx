@@ -24,6 +24,8 @@ import Unauthorized from "./pages/Unauthorized";
 import CommunityLearning from "./pages/CommunityLearning";
 import CommunityHub from "./pages/CommunityHub";
 import AboutKConnect from "./pages/AboutKConnect";
+import HomePage from "./pages/HomePage";
+import MemberProfile from "./pages/MemberProfile";
 
 function App() {
   return (
@@ -38,16 +40,19 @@ function AppRoutes() {
   const location = useLocation();
   const isLoginPage = ["/login", "/member-login", "/secretary-login"].includes(location.pathname) || location.pathname.startsWith("/reset-password/");
   const isRegistrationPage = ["/register", "/register-nhg"].includes(location.pathname);
-  const showAppChrome = !isLoginPage && !isRegistrationPage;
+  const isPublicHome = location.pathname === "/" && !user;
+  // Keep public registration pages distraction-free, but preserve the portal
+  // navigation for signed-in administrators and staff using these routes.
+  const showAppChrome = !isLoginPage && (!isRegistrationPage || Boolean(user));
 
   return (
     <div className={`d-flex flex-column min-vh-100 ${user && showAppChrome ? "kc-dashboard-shell" : ""}`}>
-      {showAppChrome && <TopGovBar />}
+      {showAppChrome && !isPublicHome && <TopGovBar />}
       {showAppChrome && <Navbar />}
       <main className="flex-grow-1">
         <Routes>
             {/* Public Entry Routes */}
-            <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+            <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <HomePage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/member-login" element={<Login accountType="member" />} />
             <Route path="/secretary-login" element={<Login accountType="secretary" />} />
@@ -55,13 +60,21 @@ function AppRoutes() {
             <Route path="/register" element={<Register />} />
             <Route path="/register-nhg" element={<NHGRegister />} />
             <Route path="/about" element={<AboutKConnect />} />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute allowedRoles={["member"]}>
+                  <MemberProfile />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/unauthorized" element={<Unauthorized />} />
 
             {/* Community training videos and learning topics */}
             <Route
               path="/learning"
               element={
-                <ProtectedRoute allowedRoles={["super_admin", "secretary", "member", "ads_cds_officer"]}>
+              <ProtectedRoute allowedRoles={["main_admin", "super_admin", "secretary", "member", "ads_officer", "cds_officer", "ads_cds_officer"]}>
                   <CommunityLearning />
                 </ProtectedRoute>
               }

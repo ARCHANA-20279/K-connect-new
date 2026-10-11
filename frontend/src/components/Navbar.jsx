@@ -26,8 +26,16 @@ const Navbar = () => {
   const isCdsOfficer = ["cdsofficer", "adscdsofficer"].includes(normalizedRole);
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [theme, setTheme] = useState(() =>
+    window.localStorage.getItem("kconnect-theme") === "dark" ? "dark" : "light"
+  );
 
   useEffect(() => setMobileMenuOpen(false), [location.pathname]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = user ? theme : "light";
+    window.localStorage.setItem("kconnect-theme", theme);
+  }, [theme, user]);
 
   const isActive = (path) => location.pathname === path;
 
@@ -52,6 +60,30 @@ const Navbar = () => {
         >
           <img className="kc-navbar-logo" src="/k-connect-logo.svg" alt="K-Connect — Kudumbashree NHG Platform" />
         </Link>
+
+        {user && (
+          isMember ? (
+            <Link to="/profile" className="kc-sidebar-usercard" aria-label="View and edit your member profile">
+              <span className="kc-sidebar-avatar" aria-hidden="true">
+                {(user.name || user.nhgName || "K").trim().charAt(0).toUpperCase()}
+              </span>
+              <span className="kc-sidebar-user-details">
+                <strong>{user.name || user.nhgName || "K-Connect user"}</strong>
+                <small>{isMl ? "അയൽക്കൂട്ട അംഗം · പ്രൊഫൈൽ കാണുക" : "NHG Member · View profile"}</small>
+              </span>
+            </Link>
+          ) : (
+            <div className="kc-sidebar-usercard">
+              <span className="kc-sidebar-avatar" aria-hidden="true">
+                {(user.name || user.nhgName || "K").trim().charAt(0).toUpperCase()}
+              </span>
+              <span className="kc-sidebar-user-details">
+                <strong>{user.name || user.nhgName || "K-Connect user"}</strong>
+                <small>{isSecretary ? (isMl ? "അയൽക്കൂട്ട സെക്രട്ടറി" : "NHG Secretary") : isMainAdmin ? (isMl ? "പ്ലാറ്റ്ഫോം അഡ്മിൻ" : "Platform Admin") : user.role}</small>
+              </span>
+            </div>
+          )
+        )}
 
         {/* Mobile Toggle Button */}
         <button
@@ -95,7 +127,7 @@ const Navbar = () => {
                     to="/loans"
                     className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/loans") ? "active-role-nav" : "text-dark"}`}
                   >
-                    💰 {t("navLoans")}
+                    {t("navLoans")}
                   </Link>
                 </li>}
                 <li className="nav-item">
@@ -132,7 +164,7 @@ const Navbar = () => {
                     backgroundColor: "#ffffff",
                   }}
                 >
-                  👤 {t("login")}
+                  {t("login")}
                 </Link>
                 <Link
                   to="/register-nhg"
@@ -142,7 +174,7 @@ const Navbar = () => {
                     border: "1px solid #248f9d",
                   }}
                 >
-                  👥 {isMl ? "അയൽക്കൂട്ടം രജിസ്റ്റർ ചെയ്യുക" : "Register NHG"}
+                  {isMl ? "അയൽക്കൂട്ടം രജിസ്റ്റർ ചെയ്യുക" : "Register NHG"}
                 </Link>
               </div>
             </>
@@ -158,7 +190,7 @@ const Navbar = () => {
                       isActive("/dashboard") ? "active-role-nav" : "text-dark"
                     }`}
                   >
-                    📊 {t("navDashboard")}
+                    {t("navDashboard")}
                   </Link>
                 </li>
 
@@ -169,7 +201,7 @@ const Navbar = () => {
                       isActive("/learning") ? "active-role-nav" : "text-dark"
                     }`}
                   >
-                    📚 {isMl ? "പഠനം" : "Learning"}
+                    {isMl ? "പഠനം" : "Learning"}
                   </Link>
                 </li>
 
@@ -185,7 +217,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        🏛️ {isMl ? "അയൽക്കൂട്ടങ്ങളും രജിസ്ട്രേഷനും" : "NHGs & Registrations"}
+                        {isMl ? "അയൽക്കൂട്ടങ്ങളും രജിസ്ട്രേഷനും" : "NHGs & Registrations"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -195,7 +227,7 @@ const Navbar = () => {
                           isActive("/members") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        👥 {t("navMembers")}
+                        {t("navMembers")}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -207,7 +239,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📱 {t("navAttendance")}
+                        {t("navAttendance")}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -217,7 +249,7 @@ const Navbar = () => {
                           isActive("/loans") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💰 {t("navLoans")}
+                        {t("navLoans")}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -227,7 +259,7 @@ const Navbar = () => {
                           isActive("/thrift") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💳 {isMl ? "സമ്പാദ്യം" : "Savings"}
+                        {isMl ? "സമ്പാദ്യം" : "Savings"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -239,7 +271,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📢 {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
+                        {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
                       </Link>
                     </li>
                   </>
@@ -255,7 +287,7 @@ const Navbar = () => {
                           isActive("/members") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        👥 {t("navMembers")}
+                        {t("navMembers")}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -267,7 +299,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📱 {isMl ? "യോഗ ഹാജർ" : "Meeting Attendance"}
+                        {isMl ? "യോഗ ഹാജർ" : "Meeting Attendance"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -279,7 +311,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📅 {t("navMeetings")}
+                        {t("navMeetings")}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -289,7 +321,7 @@ const Navbar = () => {
                           isActive("/thrift") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💳 {isMl ? "സമ്പാദ്യം / പാസ്ബുക്ക്" : "Savings / Passbook"}
+                        {isMl ? "സമ്പാദ്യം / പാസ്ബുക്ക്" : "Savings / Passbook"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -299,12 +331,12 @@ const Navbar = () => {
                           isActive("/loans") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💰 {t("navLoans")}
+                        {t("navLoans")}
                       </Link>
                     </li>
                     <li className="nav-item">
                       <Link to="/jobs" className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/jobs") ? "active-role-nav" : "text-dark"}`}>
-                        💼 {isMl ? "സാമൂഹിക ജോലികൾ" : "Community Jobs"}
+                        {isMl ? "സാമൂഹിക ജോലികൾ" : "Community Jobs"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -316,7 +348,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📢 {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
+                        {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
                       </Link>
                     </li>
                   </>
@@ -327,7 +359,7 @@ const Navbar = () => {
                   <>
                     {isBankOfficer && <li className="nav-item">
                       <Link to="/loans" className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/loans") ? "active-role-nav" : "text-dark"}`}>
-                        🏦 {isMl ? "ഡെമോ ബാങ്ക് പരിശോധന" : "Demo Bank Review"}
+                        {isMl ? "ഡെമോ ബാങ്ക് പരിശോധന" : "Demo Bank Review"}
                       </Link>
                     </li>}
                     {isAdsOfficer && <li className="nav-item">
@@ -335,7 +367,7 @@ const Navbar = () => {
                         to="/ads"
                         className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/ads") ? "active-role-nav" : "text-dark"}`}
                       >
-                        🏛️ {isMl ? "എ.ഡി.എസ് വായ്പ വിഭാഗം" : "ADS Loan Desk"}
+                        {isMl ? "എ.ഡി.എസ് വായ്പ വിഭാഗം" : "ADS Loan Desk"}
                       </Link>
                     </li>}
                     {isCdsOfficer && <li className="nav-item">
@@ -343,7 +375,7 @@ const Navbar = () => {
                         to="/loans"
                         className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/loans") ? "active-role-nav" : "text-dark"}`}
                       >
-                        🏦 {isMl ? "സി.ഡി.എസ് വായ്പ പരിശോധന" : "CDS Loan Review"}
+                        {isMl ? "സി.ഡി.എസ് വായ്പ പരിശോധന" : "CDS Loan Review"}
                       </Link>
                     </li>}
                     <li className="nav-item">
@@ -351,7 +383,7 @@ const Navbar = () => {
                         to="/circulars"
                         className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/circulars") ? "active-role-nav" : "text-dark"}`}
                       >
-                        📢 {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
+                        {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
                       </Link>
                     </li>
                   </>
@@ -369,7 +401,7 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📱 {isMl ? "ക്യു.ആർ ഹാജർ രേഖപ്പെടുത്തുക" : "Scan QR Attendance"}
+                        {isMl ? "ക്യു.ആർ ഹാജർ രേഖപ്പെടുത്തുക" : "Scan QR Attendance"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -379,7 +411,7 @@ const Navbar = () => {
                           isActive("/thrift") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💳 {isMl ? "എന്റെ പാസ്ബുക്ക്" : "My Passbook"}
+                        {isMl ? "എന്റെ പാസ്ബുക്ക്" : "My Passbook"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -389,12 +421,12 @@ const Navbar = () => {
                           isActive("/loans") ? "active-role-nav" : "text-dark"
                         }`}
                       >
-                        💰 {isMl ? "എന്റെ വായ്പകൾ" : "My Loans"}
+                        {isMl ? "എന്റെ വായ്പകൾ" : "My Loans"}
                       </Link>
                     </li>
                     <li className="nav-item">
                       <Link to="/jobs" className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/jobs") ? "active-role-nav" : "text-dark"}`}>
-                        💼 {isMl ? "എന്റെ ജോലികൾ" : "My Jobs"}
+                        {isMl ? "എന്റെ ജോലികൾ" : "My Jobs"}
                       </Link>
                     </li>
                     <li className="nav-item">
@@ -406,47 +438,42 @@ const Navbar = () => {
                             : "text-dark"
                         }`}
                       >
-                        📢 {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
+                        {isMl ? "അറിയിപ്പുകൾ" : "Notices"}
                       </Link>
                     </li>
                   </>
                 )}
                 {user && <li className="nav-item">
                   <Link to="/community-hub" className={`nav-link px-3 py-1 fw-semibold rounded-pill ${isActive("/community-hub") ? "active-role-nav" : "text-dark"}`}>
-                    🌱 {isMl ? "കമ്മ്യൂണിറ്റി ഹബ്" : "Community Hub"}
+                    {isMl ? "കമ്മ്യൂണിറ്റി ഹബ്" : "Community Hub"}
                   </Link>
                 </li>}
               </ul>
 
-              {/* Right Profile & Logout */}
-              <div className="d-flex align-items-center gap-2 mt-2 mt-lg-0 kc-profile-actions">
+              <div className="kc-sidebar-footer">
                 <LanguageSwitcher />
-                <div
-                  className="px-3 py-1 rounded-pill small border kc-profile-pill"
-                  style={{
-                    backgroundColor: isMainAdmin
-                      ? "#f1f5f9"
-                      : isSecretary
-                      ? "#ecfdf5"
-                      : "#eff6ff",
-                    color: isMainAdmin
-                      ? "#334155"
-                      : isSecretary
-                      ? "#065f46"
-                      : "#1e40af",
-                    borderColor: "#cbd5e1",
-                    fontWeight: 600,
-                  }}
-                >
-                  {isMainAdmin ? (isMl ? "🛡️ പ്രധാന അഡ്മിൻ" : "🛡️ Main Admin") : isSecretary ? `👑 ${user.nhgName || (isMl ? "സെക്രട്ടറി" : "Secretary")}` : `👤 ${user.name}`}
-                </div>
-
                 <button
                   type="button"
-                  className="btn btn-sm rounded-pill px-3 py-1 kc-logout-btn"
+                  className="kc-sidebar-action kc-logout-btn"
                   onClick={handleLogout}
                 >
-                  ↪ {t("logout")}
+                  {t("logout")}
+                </button>
+                <button
+                  type="button"
+                  className="kc-sidebar-theme-toggle"
+                  aria-pressed={theme === "dark"}
+                  onClick={() => setTheme((currentTheme) => currentTheme === "dark" ? "light" : "dark")}
+                >
+                  <span className="kc-sidebar-theme-icon" aria-hidden="true">
+                    {theme === "dark" ? (
+                      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24"><path d="M20.4 15.4A8.5 8.5 0 0 1 8.6 3.6 8.5 8.5 0 1 0 20.4 15.4Z"/></svg>
+                    )}
+                  </span>
+                  <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+                  <span className={`kc-sidebar-theme-switch ${theme === "dark" ? "is-on" : ""}`} aria-hidden="true"><i /></span>
                 </button>
               </div>
             </>

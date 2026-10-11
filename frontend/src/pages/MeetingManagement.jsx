@@ -5,12 +5,24 @@ import api from "../api";
 import { useAuth } from "../context/AuthContext";
 import "./MeetingManagement.css";
 
+const toTimeInputValue = (time) => {
+  const match = String(time || "").trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+  if (!match) return "";
+  let hours = Number(match[1]);
+  const minutes = Number(match[2] || 0);
+  const meridiem = match[3]?.toUpperCase();
+  if (minutes > 59 || hours > (meridiem ? 12 : 23) || hours < (meridiem ? 1 : 0)) return "";
+  if (meridiem === "PM" && hours !== 12) hours += 12;
+  if (meridiem === "AM" && hours === 12) hours = 0;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+};
+
 const getMeetingEndDate = (meeting) => {
   if (!meeting?.date || !meeting?.time) return null;
-  const match = meeting.time.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  const match = meeting.time.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i);
   if (!match) return null;
   let hours = Number(match[1]);
-  const minutes = Number(match[2]);
+  const minutes = Number(match[2] || 0);
   const meridiem = match[3]?.toUpperCase();
   if (minutes > 59 || hours > (meridiem ? 12 : 23) || hours < (meridiem ? 1 : 0)) return null;
   if (meridiem === "PM" && hours !== 12) hours += 12;
@@ -301,7 +313,7 @@ const MeetingManagement = () => {
     setEditForm({
       title: meeting.title,
       date: meeting.date,
-      time: meeting.time,
+      time: toTimeInputValue(meeting.time),
       durationMinutes: meeting.durationMinutes || 60,
       venue: meeting.venue,
       chairperson: meeting.chairperson,
@@ -633,9 +645,8 @@ const MeetingManagement = () => {
                   <div className="col-md-6 form-group-item">
                     <label className="form-group-label">Time *</label>
                     <input
-                      type="text"
+                      type="time"
                       className="form-control-input"
-                      placeholder="e.g. 04:30 PM"
                       value={scheduleForm.time}
                       onChange={(e) => setScheduleForm({ ...scheduleForm, time: e.target.value })}
                       required
@@ -925,7 +936,7 @@ const MeetingManagement = () => {
                   <div className="col-6 form-group-item">
                     <label className="form-group-label">Time</label>
                     <input
-                      type="text"
+                      type="time"
                       className="form-control-input"
                       value={editForm.time}
                       onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}

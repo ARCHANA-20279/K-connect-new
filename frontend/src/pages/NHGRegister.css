@@ -1,0 +1,113 @@
+.kc-nhg-register-page {
+  --nhg-green: #1e6f5c;
+  --nhg-deep: #163f35;
+  min-height: 100vh;
+  padding: 28px clamp(16px, 3vw, 46px);
+  background: linear-gradient(145deg, #f2f6f4, #fff 62%, #fbf8ef);
+}
+
+.kc-nhg-register-layout {
+  display: grid;
+  width: min(1440px, 100%);
+  grid-template-columns: minmax(270px, .72fr) minmax(0, 1.55fr);
+  align-items: start;
+  gap: clamp(20px, 3vw, 42px);
+  margin: 0 auto;
+}
+
+.kc-nhg-register-aside {
+  position: sticky;
+  top: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(30,111,92,.12);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 18px 46px rgba(24,61,48,.09);
+}
+
+.kc-nhg-back-link {
+  display: inline-flex;
+  margin: 19px 22px 15px;
+  color: var(--nhg-green);
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.kc-nhg-back-link:hover { color: var(--nhg-deep); text-decoration: underline; text-underline-offset: 3px; }
+
+.kc-nhg-register-photo {
+  position: relative;
+  height: clamp(230px, 30vw, 390px);
+  overflow: hidden;
+  background: #dfe9e0;
+}
+
+.kc-nhg-register-photo::after {
+  position: absolute;
+  inset: 30% 0 0;
+  background: linear-gradient(transparent, rgba(16,49,37,.65));
+  content: "";
+}
+
+.kc-nhg-register-photo img { width: 100%; height: 100%; object-fit: cover; object-position: center 45%; }
+
+.kc-nhg-photo-caption {
+  position: absolute;
+  z-index: 1;
+  right: 17px;
+  bottom: 16px;
+  left: 17px;
+  color: white;
+  font-size: 13px;
+  font-weight: 750;
+  text-shadow: 0 1px 5px rgba(0,0,0,.3);
+}
+
+.kc-nhg-aside-copy { padding: 24px 24px 26px; }
+.kc-nhg-aside-kicker { color: #a2752e; font-size: 10px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+.kc-nhg-aside-copy h1 { margin: 10px 0 11px; color: #183d32; font-size: clamp(22px, 2.1vw, 29px); font-weight: 800; letter-spacing: -.045em; line-height: 1.18; }
+.kc-nhg-aside-copy p { margin: 0; color: #61736a; font-size: 13px; line-height: 1.75; }
+.kc-nhg-tier-pills { display: flex; align-items: center; gap: 9px; margin-top: 20px; color: var(--nhg-green); font-size: 10px; font-weight: 850; letter-spacing: .08em; }
+.kc-nhg-tier-pills span { padding: 7px 10px; border: 1px solid #dce9e0; border-radius: 999px; background: #f4f8f5; }
+.kc-nhg-tier-pills i { width: 14px; height: 1px; background: #d7c18f; }
+
+/* Make the NHG welcome panel stand apart from the pale page and white form. */
+.kc-nhg-register-aside { border-color: #173f36; background: #173f36; box-shadow: 0 18px 46px rgba(18,55,44,.2); }
+.kc-nhg-register-aside .kc-nhg-back-link { color: #f4d995; }
+.kc-nhg-register-aside .kc-nhg-back-link:hover { color: #fff2ca; }
+.kc-nhg-register-aside .kc-nhg-aside-kicker { color: #f0c96f; }
+.kc-nhg-register-aside .kc-nhg-aside-copy h1 { color: #fff; }
+.kc-nhg-register-aside .kc-nhg-aside-copy p { color: #d4e3dc; }
+.kc-nhg-register-aside .kc-nhg-tier-pills { color: #f8e8bd; }
+.kc-nhg-register-aside .kc-nhg-tier-pills span { border-color: rgba(255,255,255,.22); background: rgba(255,255,255,.09); }
+.kc-nhg-register-aside .kc-nhg-tier-pills i { background: #c9a85d; }
+
+.kc-nhg-register-main { min-width: 0; }
+.kc-nhg-register-heading { display: flex; align-items: center; gap: 13px; margin: 0 0 16px; padding: 7px 2px; }
+.kc-nhg-register-icon { display: grid; width: 48px; height: 48px; flex: 0 0 48px; place-items: center; border-radius: 14px; color: var(--nhg-green); background: #e7f2ec; }
+.kc-nhg-register-heading h2 { margin: 0 0 4px; color: #173e33; font-size: clamp(21px, 2.1vw, 28px); font-weight: 800; letter-spacing: -.035em; }
+.kc-nhg-register-heading p { margin: 0; color: #697a72; font-size: 13px; line-height: 1.5; }
+.kc-nhg-register-main > .card { padding: clamp(20px, 3vw, 36px) !important; border: 1px solid rgba(30,111,92,.09) !important; border-radius: 18px !important; box-shadow: 0 15px 38px rgba(24,61,48,.07) !important; }
+.kc-nhg-register-main .form-control, .kc-nhg-register-main .form-select { min-height: 48px; border-color: #d3dfda; border-radius: 11px; background-color: #fbfcfb; }
+.kc-nhg-register-main .form-control:focus, .kc-nhg-register-main .form-select:focus { border-color: #4e9a7e; box-shadow: 0 0 0 3px rgba(30,111,92,.12); }
+
+@media (max-width: 900px) {
+  .kc-nhg-register-layout { grid-template-columns: minmax(230px, .7fr) minmax(0, 1.3fr); gap: 18px; }
+  .kc-nhg-register-photo { height: 260px; }
+  .kc-nhg-aside-copy { padding: 19px; }
+}
+
+@media (max-width: 680px) {
+  .kc-nhg-register-page { padding: 14px 12px 28px; }
+  .kc-nhg-register-layout { grid-template-columns: 1fr; gap: 16px; }
+  .kc-nhg-register-aside { position: relative; top: auto; }
+  .kc-nhg-back-link { margin: 14px 17px 11px; }
+  .kc-nhg-register-photo { height: 200px; }
+  .kc-nhg-aside-copy { padding: 17px 19px 19px; }
+  .kc-nhg-aside-copy h1 { max-width: 440px; font-size: 23px; }
+  .kc-nhg-aside-copy p { font-size: 12px; }
+  .kc-nhg-tier-pills { margin-top: 13px; }
+  .kc-nhg-register-heading { align-items: flex-start; margin-bottom: 11px; }
+  .kc-nhg-register-main > .card { padding: 18px !important; }
+}

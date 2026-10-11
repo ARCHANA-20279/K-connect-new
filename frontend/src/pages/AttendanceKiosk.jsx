@@ -10,6 +10,7 @@ const AttendanceKiosk = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const normalizedRole = (user?.role || "").toLowerCase().replace(/[-_]/g, "");
+  const isMainAdmin = ["mainadmin", "superadmin"].includes(normalizedRole);
   const isSecretary = normalizedRole === "secretary" || normalizedRole === "nhgsecretary";
   const isMember = normalizedRole === "member" || normalizedRole === "nhgmember";
 
@@ -19,6 +20,10 @@ const AttendanceKiosk = () => {
   const [meetingData, setMeetingData] = useState(null);
   const [loadingMeeting, setLoadingMeeting] = useState(false);
   const [refreshingAttendance, setRefreshingAttendance] = useState(false);
+  const [adminAttendanceRows, setAdminAttendanceRows] = useState([]);
+  const [adminAttendanceLoading, setAdminAttendanceLoading] = useState(false);
+  const [adminAttendanceError, setAdminAttendanceError] = useState("");
+  const [adminAttendanceUpdatedAt, setAdminAttendanceUpdatedAt] = useState(null);
 
   // Active view tab for Secretary / Member
   // Secretary: 'displayQr' | 'scanner'
@@ -42,6 +47,7 @@ const AttendanceKiosk = () => {
   const html5QrCodeRef = useRef(null);
   const isStartingRef = useRef(false);
   const cameraRunIdRef = useRef(0);
+  const loadedMeetingIdRef = useRef("");
   const lastScannedCodeRef = useRef("");
   const lastScannedTimeRef = useRef(0);
   const fileInputRef = useRef(null);
@@ -86,6 +92,56 @@ const AttendanceKiosk = () => {
     }
   };
 
+  const fetchAdminAttendanceSummary = async () => {
+    setAdminAttendanceLoading(true);
+    setAdminAttendanceError("");
+    try {
+      const [nhgResponse, meetingsResponse, attendanceResponse, membersResponse] = await Promise.all([
+        api.get("/nhgs"),
+        api.get("/meetings"),
+        api.get("/attendance/history"),
+        api.get("/members"),
+      ]);
+      const nhgs = (nhgResponse.data.nhgs || []).filter((nhg) => ["active", "approved"].includes((nhg.status || "").toLowerCase()));
+      const completedMeetings = (meetingsResponse.data.meetings || []).filter((meeting) => (meeting.status || "").toLowerCase() === "completed");
+      const activeMembers = (membersResponse.data.members || []).filter((member) => (member.status || "").toLowerCase() === "active");
+      const records = attendanceResponse.data.records || [];
+      const sameNHG = (first, second) => {
+        if (first.nhgId && second.nhgId) return String(first.nhgId) === String(second.nhgId);
+        const firstName = (first.nhgName || first.name || "").trim().toLowerCase();
+        const secondName = (second.nhgName || second.name || "").trim().toLowerCase();
+        return Boolean(firstName && secondName && firstName === secondName);
+      };
+
+      const rows = nhgs.map((nhg) => {
+        const groupMeetings = completedMeetings.filter((meeting) => sameNHG(meeting, nhg));
+        const meetingIds = new Set(groupMeetings.map((meeting) => String(meeting._id)));
+        const attendanceKeys = new Set(records
+          .filter((record) => record.status === "Present" && meetingIds.has(String(record.meetingId)))
+          .map((record) => `${record.meetingId}:${record.memberId}`));
+        const registeredActiveMembers = activeMembers.filter((member) => sameNHG(member, nhg)).length;
+        const memberCount = registeredActiveMembers || Number(nhg.memberCount || 0);
+        const possibleAttendances = memberCount * groupMeetings.length;
+        const presentAttendances = attendanceKeys.size;
+        return {
+          ...nhg,
+          activeMemberCount: memberCount,
+          completedMeetingCount: groupMeetings.length,
+          presentAttendances,
+          possibleAttendances,
+          attendancePercent: possibleAttendances ? Math.min(100, Math.round((presentAttendances / possibleAttendances) * 100)) : null,
+        };
+      }).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+      setAdminAttendanceRows(rows);
+      setAdminAttendanceUpdatedAt(new Date());
+    } catch (error) {
+      setAdminAttendanceError(error.response?.data?.message || "Could not load attendance summaries for registered NHGs.");
+    } finally {
+      setAdminAttendanceLoading(false);
+    }
+  };
+
   const handleRefreshAttendance = async () => {
     setRefreshingAttendance(true);
     try {
@@ -100,14 +156,18 @@ const AttendanceKiosk = () => {
   // 2. Fetch attendance & QR token data for the selected meeting
   const fetchMeetingAttendance = async (meetingId) => {
     if (!meetingId) return;
+    // Keep the QR visible during background attendance polling. Only show the
+    // loading state when the selected meeting has not been loaded yet.
+    const showLoading = loadedMeetingIdRef.current !== meetingId;
     try {
-      setLoadingMeeting(true);
+      if (showLoading) setLoadingMeeting(true);
       const res = await api.get(`/attendance/meeting/${meetingId}`);
       setMeetingData(res.data);
+      loadedMeetingIdRef.current = meetingId;
     } catch (err) {
       console.error("Failed to load meeting attendance data:", err);
     } finally {
-      setLoadingMeeting(false);
+      if (showLoading) setLoadingMeeting(false);
     }
   };
 
@@ -131,7 +191,8 @@ const AttendanceKiosk = () => {
   };
 
   useEffect(() => {
-    fetchMeetingsList();
+    if (isMainAdmin) fetchAdminAttendanceSummary();
+    else fetchMeetingsList();
   }, []);
 
   useEffect(() => {
@@ -472,6 +533,80 @@ const AttendanceKiosk = () => {
   }
 
   const currentMeeting = meetingData?.meeting;
+
+  if (isMainAdmin) {
+    const trackedRows = adminAttendanceRows.filter((row) => row.possibleAttendances > 0);
+    const totalPossible = trackedRows.reduce((sum, row) => sum + row.possibleAttendances, 0);
+    const totalPresent = trackedRows.reduce((sum, row) => sum + row.presentAttendances, 0);
+    const overallPercent = totalPossible ? Math.round((totalPresent / totalPossible) * 100) : null;
+    const totalActiveMembers = adminAttendanceRows.reduce((sum, row) => sum + row.activeMemberCount, 0);
+
+    return (
+      <div className="container-fluid py-4 px-3 px-lg-4 kc-admin-attendance-summary">
+        <div className="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-4">
+          <div>
+            <span className="badge px-3 py-2 text-uppercase mb-2" style={{ backgroundColor: "#1e6f5c" }}>Main Admin · Attendance Overview</span>
+            <h1 className="h2 fw-bold mb-1" style={{ color: "#164b3f" }}>NHG attendance percentages</h1>
+            <p className="text-muted mb-0">Attendance summaries for active NHGs registered on K-Connect.</p>
+          </div>
+          <button type="button" className="btn btn-outline-success" onClick={fetchAdminAttendanceSummary} disabled={adminAttendanceLoading}>
+            {adminAttendanceLoading ? "Updating…" : "Refresh summary"}
+          </button>
+        </div>
+
+        {adminAttendanceError && <div className="alert alert-danger" role="alert">{adminAttendanceError}</div>}
+
+        <div className="row g-3 mb-4">
+          <div className="col-md-4"><div className="card border-0 shadow-sm h-100 p-3"><div className="text-muted small fw-semibold">Registered active NHGs</div><div className="display-6 fw-bold" style={{ color: "#1e6f5c" }}>{adminAttendanceRows.length}</div></div></div>
+          <div className="col-md-4"><div className="card border-0 shadow-sm h-100 p-3"><div className="text-muted small fw-semibold">Active members across NHGs</div><div className="display-6 fw-bold" style={{ color: "#1e6f5c" }}>{totalActiveMembers}</div></div></div>
+          <div className="col-md-4"><div className="card border-0 shadow-sm h-100 p-3"><div className="text-muted small fw-semibold">Overall attendance</div><div className="display-6 fw-bold" style={{ color: "#1e6f5c" }}>{overallPercent === null ? "—" : `${overallPercent}%`}</div></div></div>
+        </div>
+
+        <section className="card border-0 shadow-sm" aria-labelledby="admin-nhg-attendance-heading">
+          <div className="card-body p-3 p-lg-4">
+            <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+              <div>
+                <h2 id="admin-nhg-attendance-heading" className="h5 fw-bold mb-1">Attendance by NHG</h2>
+                <p className="small text-muted mb-0">Rate = present member check-ins divided by active members across completed meetings.</p>
+              </div>
+              {adminAttendanceUpdatedAt && <small className="text-muted">Updated {adminAttendanceUpdatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>}
+            </div>
+            {adminAttendanceLoading && !adminAttendanceRows.length ? (
+              <div className="py-5 text-center text-muted" role="status">Loading NHG attendance…</div>
+            ) : adminAttendanceRows.length === 0 ? (
+              <div className="py-5 text-center text-muted">No active NHGs are registered yet.</div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table align-middle mb-0">
+                  <thead><tr><th scope="col">NHG</th><th scope="col">Location</th><th scope="col">Active members</th><th scope="col">Completed meetings</th><th scope="col">Attendance rate</th></tr></thead>
+                  <tbody>
+                    {adminAttendanceRows.map((row) => (
+                      <tr key={row._id || row.nhgId || row.name}>
+                        <th scope="row"><div className="fw-bold">{row.name}</div><small className="text-muted">{row.nhgId || "NHG ID pending"}</small></th>
+                        <td>{[row.ward ? `Ward ${row.ward}` : "", row.localBodyName, row.district].filter(Boolean).join(", ") || "—"}</td>
+                        <td>{row.activeMemberCount}</td>
+                        <td>{row.completedMeetingCount}</td>
+                        <td style={{ minWidth: 180 }}>
+                          {row.attendancePercent === null ? <span className="text-muted">No completed meetings</span> : (
+                            <div className="d-flex align-items-center gap-2">
+                              <div className="progress flex-grow-1" role="progressbar" aria-label={`${row.name} attendance`} aria-valuenow={row.attendancePercent} aria-valuemin="0" aria-valuemax="100" style={{ height: 9 }}>
+                                <div className="progress-bar" style={{ width: `${row.attendancePercent}%`, backgroundColor: row.attendancePercent >= 75 ? "#1e6f5c" : row.attendancePercent >= 50 ? "#d39a2f" : "#c75f54" }} />
+                              </div>
+                              <strong>{row.attendancePercent}%</strong>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="container py-4">

@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const crypto = require("crypto");
+const nodemailer = require("nodemailer");
 
 const hashResetCode = (code) => crypto
   .createHmac("sha256", process.env.JWT_SECRET || "kconnect_secret")
@@ -302,8 +303,10 @@ const forgotPassword = async (req, res) => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ message: "Please provide your registered email address" });
     }
-    if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
-      return res.status(503).json({ message: "Password reset email is not configured. Please ask the site administrator to configure the email service." });
+    const gmailUser = String(process.env.GMAIL_USER || "").trim();
+    const gmailAppPassword = String(process.env.GMAIL_APP_PASSWORD || "").replace(/\s/g, "");
+    if (!gmailUser || !gmailAppPassword) {
+      return res.status(503).json({ message: "Password reset email is not configured. Add GMAIL_USER and GMAIL_APP_PASSWORD to backend/.env, then restart the backend." });
     }
     const user = await User.findOne({ email }).select("+passwordResetCodeHash +passwordResetCodeExpires +passwordResetCodeAttempts +passwordResetTokenHash +passwordResetExpires");
     if (user) {
@@ -316,23 +319,21 @@ const forgotPassword = async (req, res) => {
       await user.save();
       const displayName = String(user.name || "member");
       const safeName = displayName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-      const mailResponse = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: process.env.EMAIL_FROM,
-          to: [email],
+      const mailer = nodemailer.createTransport({ service: "gmail", auth: { user: gmailUser, pass: gmailAppPassword } });
+      try {
+        await mailer.sendMail({
+          from: `K-Connect <${gmailUser}>`,
+          to: email,
           subject: "Your K-Connect password reset code",
           text: `Hello ${displayName},\n\nYour K-Connect password reset code is ${code}. It expires in 10 minutes and can be used once.\n\nIf you did not request this, ignore this email.`,
           html: `<p>Hello ${safeName},</p><p>Your K-Connect password reset code is:</p><p style="font-size:28px;font-weight:bold;letter-spacing:8px">${code}</p><p>This code expires in 10 minutes and can be used once.</p><p>If you did not request this, ignore this email.</p>`,
-        }),
-      });
-      if (!mailResponse.ok) {
+        });
+      } catch (mailError) {
         user.passwordResetCodeHash = undefined;
         user.passwordResetCodeExpires = undefined;
         user.passwordResetCodeAttempts = 0;
         await user.save();
-        console.error("Password reset email provider returned an error:", await mailResponse.text());
+        console.error("Password reset email delivery failed:", mailError.message);
         return res.status(502).json({ message: "The reset email could not be sent. Please try again later or contact your NHG Secretary." });
       }
     }

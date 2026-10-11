@@ -16,6 +16,8 @@ const MemberList = () => {
   const [search, setSearch] = useState("");
 
   const [editingMember, setEditingMember] = useState(null);
+  const [profileUpdateRequests, setProfileUpdateRequests] = useState([]);
+  const [profileRequestError, setProfileRequestError] = useState("");
 
   const [editForm, setEditForm] = useState({
     name: "",
@@ -47,7 +49,36 @@ const MemberList = () => {
 
   useEffect(() => {
     fetchMembers();
+    if (isSecretary) fetchProfileUpdateRequests();
   }, []);
+
+  const fetchProfileUpdateRequests = async () => {
+    try {
+      const { data } = await api.get("/members/profile-updates");
+      setProfileUpdateRequests(data.requests || []);
+      setProfileRequestError("");
+    } catch (err) {
+      setProfileRequestError(err.response?.data?.message || "Could not load profile update requests.");
+    }
+  };
+
+  const reviewProfileUpdate = async (request, action) => {
+    const reviewNote = action === "reject"
+      ? window.prompt(`Tell ${request.memberName} why the requested update needs changes (optional):`)
+      : "";
+    if (reviewNote === null) return;
+
+    try {
+      const { data } = await api.patch(`/members/profile-updates/${request._id}`, { action, reviewNote });
+      setProfileUpdateRequests((current) => current.filter((item) => item._id !== request._id));
+      if (action === "approve") {
+        setMembers((current) => current.map((member) => member._id === data.member._id ? data.member : member));
+      }
+      alert(data.message || (action === "approve" ? "Profile update approved." : "Profile update declined."));
+    } catch (err) {
+      alert(err.response?.data?.message || "Could not review this profile update.");
+    }
+  };
 
   // =========================
   // EDIT MEMBER
@@ -253,6 +284,49 @@ const MemberList = () => {
           )}
         </div>
       </div>
+
+      {isSecretary && (
+        <section className="card p-3 p-md-4 mb-4 shadow-sm border-0" aria-labelledby="member-profile-review-heading">
+          <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div>
+              <h3 id="member-profile-review-heading" className="h5 fw-bold mb-1">Member profile update requests</h3>
+              <p className="text-muted small mb-0">Verify member-submitted details before they are saved to the NHG register.</p>
+            </div>
+            <span className="badge text-bg-warning">{profileUpdateRequests.length} awaiting review</span>
+          </div>
+          {profileRequestError && <div className="alert alert-warning mb-3" role="alert">{profileRequestError}</div>}
+          {profileUpdateRequests.length === 0 ? (
+            <p className="text-muted small mb-0">There are no member profile changes waiting for your review.</p>
+          ) : (
+            <div className="d-grid gap-3">
+              {profileUpdateRequests.map((request) => (
+                <article key={request._id} className="border rounded-3 p-3">
+                  <div className="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
+                    <div>
+                      <h4 className="h6 fw-bold mb-1">{request.memberName} <span className="text-muted fw-normal">({request.memberId})</span></h4>
+                      <small className="text-muted">Submitted {new Date(request.createdAt).toLocaleString()}</small>
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button type="button" className="btn btn-success btn-sm" onClick={() => reviewProfileUpdate(request, "approve")}>Approve changes</button>
+                      <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => reviewProfileUpdate(request, "reject")}>Request correction</button>
+                    </div>
+                  </div>
+                  <div className="table-responsive">
+                    <table className="table table-sm align-middle mb-0">
+                      <thead><tr><th scope="col">Detail</th><th scope="col">Current</th><th scope="col">Requested</th></tr></thead>
+                      <tbody>
+                        {Object.entries(request.proposedChanges || {}).map(([field, change]) => (
+                          <tr key={field}><th scope="row" className="text-capitalize">{field}</th><td>{change.from || "—"}</td><td className="fw-semibold">{change.to || "—"}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* =========================
           EDIT FORM

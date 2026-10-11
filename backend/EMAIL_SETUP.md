@@ -1,19 +1,19 @@
-# Password reset email setup
+# Password reset email setup with Gmail
 
-K-Connect sends reset codes through the Resend email API. The reset feature cannot send mail until both settings below are added to `backend/.env`:
+K-Connect sends password reset codes through Gmail SMTP using Nodemailer. Configure these values in `backend/.env`:
 
 ```env
-RESEND_API_KEY=re_your_sending_key
-EMAIL_FROM=K-Connect <no-reply@your-verified-domain.com>
+GMAIL_USER=yourgmail@gmail.com
+GMAIL_APP_PASSWORD=your16characterapppassword
 ```
 
-1. Create a Resend account and add a sending domain you control.
-2. Complete the DNS verification Resend requests for that domain.
-3. Create a sending-only API key and put it in `RESEND_API_KEY`.
-4. Set `EMAIL_FROM` to an address on the verified domain.
-5. Save `backend/.env`, then restart the backend process.
-6. Use Forgot Password with an account email and check its inbox and spam folder.
+1. In the Google Account used to send K-Connect email, enable 2-Step Verification.
+2. Open Google's App Passwords page and create a password named `K-Connect`.
+3. Copy the generated 16-character App Password into `GMAIL_APP_PASSWORD`. Spaces are okay; the backend removes them.
+4. Set `GMAIL_USER` to the same Gmail address used to generate that App Password.
+5. Save `backend/.env` and restart the backend.
+6. Use **Forgot password?** with an account email, then check the inbox and spam folder for the six-digit code.
 
-Never put the API key in frontend files or commit it. The backend loads `backend/.env` based on the server file location, so it also works when the backend is started from the repository root.
+Never put the Gmail App Password in frontend files, send it in chat, or commit `backend/.env`. If the App Password is exposed, remove it from the Google Account and generate a new one. Google requires 2-Step Verification to create an App Password and may hide the option for some managed or protected accounts.
 
-Resend setup: https://resend.com/docs
+Google's current instructions: https://support.google.com/accounts/answer/185833

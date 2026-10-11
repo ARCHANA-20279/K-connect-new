@@ -9,7 +9,8 @@ import "../portal.css";
 const LoanManagement = () => {
   const { t, i18n } = useTranslation();
   const location = useLocation();
-  const isMl = i18n.language === "ml";
+  const activeLanguage = (i18n.resolvedLanguage || i18n.language || "en").toLowerCase();
+  const isMl = activeLanguage.startsWith("ml");
   const { user } = useAuth();
   const role = (user?.role || "").toLowerCase();
   const isSecretary = ["secretary", "nhg_secretary"].includes(role);
@@ -20,6 +21,9 @@ const LoanManagement = () => {
   const isBankOfficer = role === "bank_officer";
   const canViewRegister = isSecretary || isAdsOfficer || isCdsOfficer || isMainAdmin || isBankOfficer;
   const isAdsWorkspace = location.pathname === "/ads" && isAdsOfficer;
+  const loanJourneySteps = isMl
+    ? [["👤", "അംഗം", "അപേക്ഷ"], ["🤝", "എൻ.എച്ച്.ജി സെക്രട്ടറി", "അർഹത + യോഗ തീരുമാനം"], ["🏘️", "എ.ഡി.എസ്", "പരിശോധിച്ച് അംഗീകരിക്കുന്നു"], ["🏛️", "സി.ഡി.എസ്", "പരിശോധിച്ച് ബാങ്കിലേക്ക്"], ["🏦", "ബാങ്ക്", "തീരുമാനവും വിതരണവും"], ["₹", "അംഗം", "ഇ.എം.ഐ തിരിച്ചടവ്"]]
+    : [["👤", "Member", "Apply"], ["🤝", "NHG Secretary", "Eligibility + resolution"], ["🏘️", "ADS", "Verify and approve"], ["🏛️", "CDS", "Verify and forward"], ["🏦", "Bank", "Decision and disbursement"], ["₹", "Member", "Repay EMI"]];
 
   const [loans, setLoans] = useState([]);
   const [adsNotifications, setAdsNotifications] = useState([]);
@@ -573,7 +577,7 @@ const LoanManagement = () => {
             <span className="badge text-bg-light border">{isMl ? "അപേക്ഷ മുതൽ ഇ.എം.ഐ വരെ" : "Application to EMI"}</span>
           </div>
           <div className="row g-2 text-center">
-            {(isMl ? [["👤", "അംഗം", "അപേക്ഷ"], ["🤝", "എൻ.എച്ച്.ജി സെക്രട്ടറി", "അർഹത + യോഗ തീരുമാനം"], ["🏘️", "എ.ഡി.എസ്", "പരിശോധിച്ച് അംഗീകരിക്കുന്നു"], ["🏛️", "സി.ഡി.എസ്", "പരിശോധിച്ച് ബാങ്കിലേക്ക്"], ["🏦", "ബാങ്ക്", "തീരുമാനവും വിതരണവും"], ["₹", "അംഗം", "ഇ.എം.ഐ തിരിച്ചടവ്"]] : [["👤", "Member", "Apply"], ["🤝", "NHG Secretary", "Eligibility + resolution"], ["🏘️", "ADS", "Verify and approve"], ["🏛️", "CDS", "Verify and forward"], ["🏦", "Bank", "Decision and disbursement"], ["₹", "Member", "Repay EMI"]]).map(([icon, title, detail], index) => <div className="col-6 col-md-4 col-xl-2" key={title}><div className={`h-100 p-2 border rounded-3 ${overviewStageClass(index)}`}><div className="fs-4">{icon}</div><strong className="small d-block">{index + 1}. {title}</strong><span className="small">{detail}</span></div></div>)}
+            {loanJourneySteps.map(([icon, title, detail], index) => <div className="col-6 col-md-4 col-xl-2" key={`loan-journey-step-${index}`}><div className={`h-100 p-2 border rounded-3 ${overviewStageClass(index)}`}><div className="fs-4">{icon}</div><strong className="small d-block">{index + 1}. {title}</strong><span className="small">{detail}</span></div></div>)}
           </div>
           <div className="alert alert-info small mt-3 mb-0">{isMl ? "സമയത്ത് അടച്ച ഗഡുക്കൾ 5% സബ്‌സിഡി പരിശോധനയ്ക്ക് സ്ഥാനാർഥിയായി രേഖപ്പെടുത്തും. യഥാർത്ഥ യോഗ്യതയും തുകയും ബാധകമായ പദ്ധതി ചട്ടങ്ങളും ബാങ്കിന്റെ സ്ഥിരീകരണവും അനുസരിച്ചായിരിക്കും; K-Connect സബ്‌സിഡി സ്വമേധയാ ക്രെഡിറ്റ് ചെയ്യില്ല." : "On-time installments are flagged as potential candidates for a 5% subsidy review. Actual eligibility and amount depend on the applicable scheme and bank confirmation; K-Connect does not credit a subsidy automatically."}</div>
         </section>}

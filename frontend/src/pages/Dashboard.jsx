@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import api from "../api";
 import { io } from "socket.io-client";
 import { speakMemberWelcome } from "../utils/welcomeSpeech";
+import KBazaar from "../components/KBazaar";
 import "../portal.css";
 
 const Dashboard = () => {
-  const { user, login, updateUser, logout } = useAuth();
+  const { user, updateUser } = useAuth();
   const { i18n } = useTranslation();
-  const navigate = useNavigate();
 
   const rawRole = (user?.role || "").toLowerCase();
   const isMainAdmin =
@@ -74,7 +74,7 @@ const Dashboard = () => {
   // NHG Secretary & Member State
   const [nhgStats, setNhgStats] = useState({
     membersCount: 0,
-    attendanceRate: 0,
+    attendanceRate: null,
     savingsTotal: 0,
     pendingLoansCount: 0,
     meetingsCount: 0,
@@ -177,14 +177,13 @@ const Dashboard = () => {
         const pendingLoans = lList.filter((l) => l.status === "Pending").length;
         const activeCount = mList.filter((m) => m.status === "Active").length;
 
-        // Calculate attendance rate from completed meetings
-        let avgAtt = 92; // default representative percentage
-        if (mtList.length > 0 && activeCount > 0) {
-          const totalAttended = mtList.reduce((acc, m) => acc + (m.totalAttendees || 0), 0);
-          const possible = mtList.length * activeCount;
-          if (possible > 0) {
-            avgAtt = Math.min(100, Math.round((totalAttended / possible) * 100)) || 92;
-          }
+        // Only calculate attendance when completed meetings and active members exist.
+        const completedMeetings = mtList.filter((meeting) => meeting.status === "Completed");
+        let avgAtt = null;
+        const possibleAttendance = completedMeetings.length * activeCount;
+        if (possibleAttendance > 0) {
+          const totalAttended = completedMeetings.reduce((total, meeting) => total + Number(meeting.totalAttendees || 0), 0);
+          avgAtt = Math.min(100, Math.round((totalAttended / possibleAttendance) * 100));
         }
 
         setNhgStats({
@@ -379,11 +378,6 @@ const Dashboard = () => {
   };
 
   // Logout helper
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
-
   // =========================================================================
   // VIEW 1: MAIN ADMIN DASHBOARD
   // =========================================================================
@@ -402,84 +396,33 @@ const Dashboard = () => {
           )}
 
           <div className="row g-4">
-            {/* SIDEBAR NAVIGATION - Exactly per requirement 2 & 11 */}
-            <div className="col-lg-2 col-md-3">
-              <div
-                className="card border-0 shadow-sm p-3 sticky-top"
-                style={{ borderRadius: "16px", backgroundColor: "#ffffff", top: "80px" }}
-              >
-                <div className="text-center pb-3 border-bottom mb-3">
-                  <div
-                    className="mx-auto rounded-circle d-flex align-items-center justify-content-center mb-2"
-                    style={{ width: "48px", height: "48px", backgroundColor: "#ecfdf5", fontSize: "24px" }}
+            <div className="col-12">
+              <nav className="kc-admin-dashboard-tabs" aria-label="Admin dashboard sections">
+                {[
+                  { id: "dashboard", label: "Overview" },
+                  { id: "nhgs", label: "NHGs", count: allNHGs.length },
+                  { id: "pending", label: "Pending registrations", count: pendingNHGs.length },
+                  { id: "members", label: "Members", count: allMembers.length },
+                  { id: "attendance", label: "Attendance" },
+                  { id: "loans", label: "Loans", count: allLoans.length },
+                  { id: "savings", label: "Savings" },
+                  { id: "notices", label: "Notices", count: allNotices.length },
+                  { id: "users", label: "Users", count: allUsers.length },
+                  { id: "settings", label: "Settings" },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={`kc-admin-dashboard-tab ${adminTab === tab.id ? "is-active" : ""}`}
+                    aria-current={adminTab === tab.id ? "page" : undefined}
+                    onClick={() => setAdminTab(tab.id)}
                   >
-                    🛡️
-                  </div>
-                  <h6 className="fw-bold mb-0 text-dark">Main Admin</h6>
-                  <small className="text-muted" style={{ fontSize: "11px" }}>
-                    Platform Controller
-                  </small>
-                </div>
+                    <span>{tab.label}</span>
+                    {tab.count > 0 && <span className="kc-admin-tab-count">{tab.count}</span>}
+                  </button>
+                ))}
+              </nav>
 
-                <div className="nav flex-column gap-1 small fw-semibold">
-                  {[
-                    { id: "dashboard", label: "Dashboard", icon: "📊" },
-                    { id: "nhgs", label: "NHGs", icon: "🏛️", count: allNHGs.length },
-                    { id: "pending", label: "Pending Registrations", icon: "⏳", count: pendingNHGs.length, badgeBg: "#ef4444" },
-                    { id: "members", label: "Members", icon: "👥", count: allMembers.length },
-                    { id: "attendance", label: "Attendance", icon: "📱" },
-                    { id: "loans", label: "Loans", icon: "💰", count: allLoans.length },
-                    { id: "savings", label: "Savings", icon: "💳" },
-                    { id: "notices", label: "Notices", icon: "📢", count: allNotices.length },
-                    { id: "users", label: "Users", icon: "👤", count: allUsers.length },
-                    { id: "settings", label: "Settings", icon: "⚙️" },
-                  ].map((tab) => (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      className={`btn btn-sm text-start py-2 px-3 rounded-3 d-flex justify-content-between align-items-center ${
-                        adminTab === tab.id ? "text-white" : "text-dark"
-                      }`}
-                      style={{
-                        backgroundColor: adminTab === tab.id ? "#0f766e" : "transparent",
-                        fontWeight: adminTab === tab.id ? 700 : 500,
-                      }}
-                      onClick={() => setAdminTab(tab.id)}
-                    >
-                      <span>
-                        <span className="me-2">{tab.icon}</span>
-                        {tab.label}
-                      </span>
-                      {tab.count !== undefined && tab.count > 0 && (
-                        <span
-                          className="badge rounded-pill"
-                          style={{
-                            backgroundColor: tab.badgeBg || (adminTab === tab.id ? "rgba(255,255,255,0.25)" : "#e2e8f0"),
-                            color: tab.badgeBg ? "#ffffff" : adminTab === tab.id ? "#ffffff" : "#475569",
-                            fontSize: "10px",
-                          }}
-                        >
-                          {tab.count}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-
-                  <div className="pt-3 border-top mt-2">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-danger w-100 py-2 rounded-pill fw-semibold"
-                      onClick={handleLogout}
-                    >
-                      🚪 Logout
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* MAIN CONTENT AREA */}
-            <div className="col-lg-10 col-md-9">
               {/* Header Title Bar */}
               <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                 <div>
@@ -1255,9 +1198,9 @@ const Dashboard = () => {
               >
                 <div className="text-muted small fw-semibold mb-1">Attendance</div>
                 <h2 className="fw-bold mb-0 text-primary">
-                  {loading ? "..." : `${nhgStats.attendanceRate}%`}
+                  {loading ? "..." : nhgStats.attendanceRate === null ? "—" : `${nhgStats.attendanceRate}%`}
                 </h2>
-                <small className="text-muted" style={{ fontSize: "11px" }}>Meeting Attendance Rate</small>
+                <small className="text-muted" style={{ fontSize: "11px" }}>{nhgStats.attendanceRate === null ? "No completed meeting data yet" : "Completed meeting attendance"}</small>
               </div>
             </div>
 
@@ -1288,6 +1231,10 @@ const Dashboard = () => {
                 <small className="text-muted" style={{ fontSize: "11px" }}>Awaiting Review</small>
               </div>
             </div>
+          </div>
+
+          <div className="mb-4">
+            <KBazaar />
           </div>
 
           {/* QUICK ACTIONS BAR (Exact per Requirement 10) */}
@@ -1663,6 +1610,10 @@ const Dashboard = () => {
               <small className="text-muted">{isMalayalam ? "വാർഡ് 12, കുടുംബശ്രീ സി.ഡി.എസ്" : "Ward 12, Kudumbashree CDS"}</small>
             </div>
           </div>
+        </div>
+
+        <div className="mb-4">
+          <KBazaar />
         </div>
 
         {nhgLoans.some((loan) => loan.memberId === (memberId || user?.memberId) && ["Approved", "Rejected", "Completed"].includes(loan.status)) && (

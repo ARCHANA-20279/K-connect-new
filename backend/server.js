@@ -19,6 +19,8 @@ const jobRoutes = require("./routes/jobRoutes");
 const auditRoutes = require("./routes/auditRoutes");
 const nhgRoutes = require("./routes/nhgRoutes");
 const enterpriseRoutes = require("./routes/enterpriseRoutes");
+const learningVideoRoutes = require("./routes/learningVideoRoutes");
+const marketplaceRoutes = require("./routes/marketplaceRoutes");
 const seedInitialData = require("./config/seed");
 
 connectDB().then(() => {
@@ -48,6 +50,8 @@ app.use("/api/programmes", programmeRoutes);
 app.use("/api/enterprises", enterpriseRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/audit", auditRoutes);
+app.use("/api/learning-videos", learningVideoRoutes);
+app.use("/api/marketplace", marketplaceRoutes);
 
 io.use(async (socket, next) => {
   try {

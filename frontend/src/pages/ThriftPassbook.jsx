@@ -7,6 +7,7 @@ import "../portal.css";
 
 const ThriftPassbook = () => {
   const { t, i18n } = useTranslation();
+  const ml = (i18n.resolvedLanguage || i18n.language || "en").startsWith("ml");
   const { user } = useAuth();
   const role = (user?.role || "").toLowerCase();
   const isSecretary = ["secretary", "nhg_secretary"].includes(role);
@@ -135,7 +136,7 @@ const ThriftPassbook = () => {
   const handleDepositSubmit = async (e) => {
     e.preventDefault();
     if (!form.memberId) {
-      alert("Please select a member");
+      alert(ml ? "ഒരു അംഗത്തെ തിരഞ്ഞെടുക്കുക" : "Please select a member");
       return;
     }
     try {
@@ -163,7 +164,7 @@ const ThriftPassbook = () => {
       setActiveTab("passbook");
       await fetchData();
       await fetchPassbook(depositedMemberId);
-      alert(editingDeposit ? "Thrift entry updated successfully." : "Thrift deposit recorded successfully!");
+      alert(editingDeposit ? (ml ? "സമ്പാദ്യ രേഖ പുതുക്കി." : "Thrift entry updated successfully.") : (ml ? "സമ്പാദ്യ നിക്ഷേപം രേഖപ്പെടുത്തി!" : "Thrift deposit recorded successfully!"));
     } catch (err) {
       alert(err.response?.data?.message || (editingDeposit ? "Failed to update thrift entry" : "Failed to record deposit"));
     }
@@ -191,7 +192,7 @@ const ThriftPassbook = () => {
         {/* HERO BANNER */}
         <div className="portal-hero-banner d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
           <div>
-            <span className="portal-hero-tag">Module 4 • {t("govtTagline")}</span>
+            <span className="portal-hero-tag">{ml ? "ഘടകം 4" : "Module 4"} • {t("govtTagline")}</span>
             <h1 className="portal-hero-title">{t("thriftHeroTitle")}</h1>
             <p className="portal-hero-subtitle">
               {t("thriftHeroSubtitle")}
@@ -216,7 +217,7 @@ const ThriftPassbook = () => {
                 className="btn btn-light fw-bold text-success px-4 py-2 shadow-sm"
                 style={{ borderRadius: "12px" }}
               >
-                🔒 {t("login")} (Secretary)
+                🔒 {t("login")} ({ml ? "സെക്രട്ടറി" : "Secretary"})
               </Link>
             )}
           </div>
@@ -293,7 +294,7 @@ const ThriftPassbook = () => {
           <div className="portal-card">
             <div className="portal-card-header d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
               <div>
-                <h5 className="portal-card-title mb-1">Recent Thrift Deposits</h5>
+              <h5 className="portal-card-title mb-1">{ml ? "സമീപകാല സമ്പാദ്യ നിക്ഷേപങ്ങൾ" : "Recent Thrift Deposits"}</h5>
                 <span className="badge bg-light text-dark border">
                   Live Register ({data.deposits.length})
                 </span>
@@ -304,25 +305,25 @@ const ThriftPassbook = () => {
             </div>
 
             {loading ? (
-              <div className="text-center py-4">Loading register...</div>
+              <div className="text-center py-4">{ml ? "രജിസ്റ്റർ ലോഡ് ചെയ്യുന്നു…" : "Loading register..."}</div>
             ) : data.deposits.length === 0 ? (
               <div className="text-center py-5 text-muted">
-                <p className="mb-0">No thrift deposits recorded yet.</p>
-                {isSecretary && <small>Use “Add Member Thrift” above to record a member’s savings.</small>}
+              <p className="mb-0">{ml ? "സമ്പാദ്യ നിക്ഷേപങ്ങൾ ഇതുവരെ രേഖപ്പെടുത്തിയിട്ടില്ല." : "No thrift deposits recorded yet."}</p>
+              {isSecretary && <small>{ml ? "അംഗത്തിന്റെ സമ്പാദ്യം രേഖപ്പെടുത്താൻ മുകളിലെ ‘അംഗത്തിന്റെ സമ്പാദ്യം ചേർക്കുക’ ഉപയോഗിക്കുക." : "Use “Add Member Thrift” above to record a member’s savings."}</small>}
               </div>
             ) : (
               <div className="table-responsive">
                 <table className="portal-table table">
                   <thead>
                     <tr>
-                      <th>Receipt #</th>
-                      <th>Date</th>
-                      <th>Member</th>
-                      <th>Amount</th>
-                      <th>Payment Mode</th>
-                      <th>Collected By</th>
-                      <th>Passbook</th>
-                      {isSecretary && <th>Actions</th>}
+                  <th>{ml ? "രസീത് നമ്പർ" : "Receipt #"}</th>
+                  <th>{t("date")}</th>
+                  <th>{t("member")}</th>
+                  <th>{ml ? "തുക" : "Amount"}</th>
+                  <th>{ml ? "പണമടച്ച രീതി" : "Payment Mode"}</th>
+                  <th>{ml ? "പിരിച്ചെടുത്തത്" : "Collected By"}</th>
+                  <th>{ml ? "പാസ്ബുക്ക്" : "Passbook"}</th>
+                  {isSecretary && <th>{t("actions")}</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -380,27 +381,27 @@ const ThriftPassbook = () => {
           {isSecretary && <div className="portal-card mt-4">
             <div className="portal-card-header d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
               <div>
-                <h5 className="portal-card-title mb-1">Member Thrift Totals</h5>
-                <small className="text-muted">Cumulative amount recorded for each active NHG member</small>
+              <h5 className="portal-card-title mb-1">{ml ? "അംഗങ്ങളുടെ സമ്പാദ്യ ആകെ തുക" : "Member Thrift Totals"}</h5>
+              <small className="text-muted">{ml ? "സജീവമായ ഓരോ അയൽക്കൂട്ട അംഗത്തിന്റെയും ആകെ രേഖപ്പെടുത്തിയ സമ്പാദ്യം" : "Cumulative amount recorded for each active NHG member"}</small>
               </div>
               <span className="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
                 NHG Total: ₹{data.totalSavingsFund.toLocaleString()}
               </span>
             </div>
             {loading ? (
-              <div className="text-center py-4 text-muted">Loading member totals…</div>
+            <div className="text-center py-4 text-muted">{ml ? "അംഗങ്ങളുടെ ആകെ തുക ലോഡ് ചെയ്യുന്നു…" : "Loading member totals…"}</div>
             ) : memberThriftTotals.length === 0 ? (
-              <div className="text-center py-4 text-muted">No active members found for this NHG.</div>
+            <div className="text-center py-4 text-muted">{ml ? "ഈ അയൽക്കൂട്ടത്തിൽ സജീവ അംഗങ്ങളെ കണ്ടെത്തിയില്ല." : "No active members found for this NHG."}</div>
             ) : (
               <div className="table-responsive">
                 <table className="portal-table table mb-0">
                   <thead>
                     <tr>
-                      <th>Member</th>
-                      <th>Member ID</th>
-                      <th>Deposits</th>
-                      <th>Total Thrift</th>
-                      <th>Passbook</th>
+                  <th>{t("member")}</th>
+                  <th>{ml ? "അംഗ ഐഡി" : "Member ID"}</th>
+                  <th>{ml ? "നിക്ഷേപങ്ങൾ" : "Deposits"}</th>
+                  <th>{ml ? "ആകെ സമ്പാദ്യം" : "Total Thrift"}</th>
+                  <th>{ml ? "പാസ്ബുക്ക്" : "Passbook"}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -430,21 +431,21 @@ const ThriftPassbook = () => {
           <div className="portal-card">
             <div className="portal-card-header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
               <div>
-                <h5 className="portal-card-title">📖 {t("myPassbookTitle") || "Digital Member Passbook"}</h5>
+              <h5 className="portal-card-title">📖 {t("myPassbookTitle") || (ml ? "അംഗത്തിന്റെ ഡിജിറ്റൽ പാസ്ബുക്ക്" : "Digital Member Passbook")}</h5>
                 <small className="text-muted">
                   Official digitized savings passbook for Kudumbashree Ayalkoottam members
                 </small>
               </div>
 
               <div className="d-flex align-items-center gap-2 flex-wrap">
-                {!isMember && <span className="small text-muted fw-semibold">Select Member:</span>}
+                {!isMember && <span className="small text-muted fw-semibold">{ml ? "അംഗത്തെ തിരഞ്ഞെടുക്കുക:" : "Select Member:"}</span>}
                 {!isMember && <select
                   className="form-select form-select-sm"
                   style={{ width: "240px" }}
                   value={selectedMemberId}
                   onChange={(e) => handleSelectMemberPassbook(e.target.value)}
                 >
-                  <option value="">-- Choose Member --</option>
+                  <option value="">{ml ? "-- അംഗത്തെ തിരഞ്ഞെടുക്കുക --" : "-- Choose Member --"}</option>
                   {members.map((m) => (
                     <option key={m._id} value={m.memberId}>
                       {m.name} ({m.memberId})
@@ -460,7 +461,7 @@ const ThriftPassbook = () => {
                     title="Print Passbook Statement"
                   >
                     <span>🖨️</span>
-                    <span>{t("printPassbookStatement") || "Print Passbook Statement"}</span>
+                    <span>{t("printPassbookStatement") || (ml ? "പാസ്ബുക്ക് സ്റ്റേറ്റ്മെന്റ് പ്രിന്റ് ചെയ്യുക" : "Print Passbook Statement")}</span>
                   </button>
                 )}
               </div>
@@ -482,22 +483,22 @@ const ThriftPassbook = () => {
                       <div className="d-flex align-items-center gap-2 mb-1">
                         <span className="fs-4">🏛️</span>
                         <span className="fw-bold tracking-wide text-uppercase" style={{ fontSize: "12px", letterSpacing: "1px" }}>
-                          Kudumbashree Mission • Kerala State Poverty Eradication
+                          {ml ? "കുടുംബശ്രീ മിഷൻ • കേരള സംസ്ഥാന ദാരിദ്ര്യ നിർമാർജന മിഷൻ" : "Kudumbashree Mission • Kerala State Poverty Eradication"}
                         </span>
                       </div>
                       <h4 className="fw-bolder mb-0 text-white">
                         {memberPassbook.deposits[0]?.memberName ||
                           members.find((m) => m.memberId === memberPassbook.memberId)?.name ||
-                          "NHG Member"}
+                          (ml ? "അയൽക്കൂട്ട അംഗം" : "NHG Member")}
                       </h4>
                       <small className="text-white-50">
-                        Ward 15 Ayalkoottam • Member ID: <strong>{memberPassbook.memberId}</strong>
+                {ml ? "വാർഡ് 15 അയൽക്കൂട്ടം • അംഗ ഐഡി:" : "Ward 15 Ayalkoottam • Member ID:"} <strong>{memberPassbook.memberId}</strong>
                       </small>
                     </div>
 
                     <div className="text-end">
                       <span className="badge bg-white text-success fw-bold px-3 py-2 rounded-pill shadow-sm" style={{ fontSize: "11px" }}>
-                        ✓ Active Thrift Account
+                        ✓ {ml ? "സജീവ സമ്പാദ്യ അക്കൗണ്ട്" : "Active Thrift Account"}
                       </span>
                     </div>
                   </div>
@@ -514,7 +515,7 @@ const ThriftPassbook = () => {
                       <small className="text-emerald-100 d-block text-uppercase" style={{ fontSize: "11px", letterSpacing: "0.5px" }}>
                         Weeks Contributed
                       </small>
-                      <strong className="fs-3 fw-bold text-white">{memberPassbook.depositCount} Meetings</strong>
+                <strong className="fs-3 fw-bold text-white">{memberPassbook.depositCount} {ml ? "യോഗങ്ങൾ" : "Meetings"}</strong>
                     </div>
 
                     <div className="col-md-4 col-sm-12">
@@ -535,7 +536,7 @@ const ThriftPassbook = () => {
                     <input
                       type="text"
                       className="form-control border-start-0"
-                      placeholder="Filter by date or receipt #..."
+                placeholder={ml ? "തീയതി അല്ലെങ്കിൽ രസീത് നമ്പർ ഉപയോഗിച്ച് തിരയുക…" : "Filter by date or receipt #..."}
                       value={passbookFilter}
                       onChange={(e) => setPassbookFilter(e.target.value)}
                     />
@@ -560,12 +561,12 @@ const ThriftPassbook = () => {
                   <table className="portal-table table">
                     <thead>
                       <tr>
-                        <th>Receipt #</th>
-                        <th>Deposit Date</th>
-                        <th>Description / Purpose</th>
-                        <th>Amount Deposited</th>
-                        <th>Payment Mode</th>
-                        <th>Recorded By</th>
+                  <th>{ml ? "രസീത് നമ്പർ" : "Receipt #"}</th>
+                  <th>{ml ? "നിക്ഷേപ തീയതി" : "Deposit Date"}</th>
+                  <th>{ml ? "വിവരണം / ഉദ്ദേശ്യം" : "Description / Purpose"}</th>
+                  <th>{ml ? "നിക്ഷേപിച്ച തുക" : "Amount Deposited"}</th>
+                  <th>{ml ? "പണമടച്ച രീതി" : "Payment Mode"}</th>
+                  <th>{ml ? "രേഖപ്പെടുത്തിയത്" : "Recorded By"}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -590,12 +591,12 @@ const ThriftPassbook = () => {
                                 <code className="fw-bold text-primary">{d.receiptNumber}</code>
                               </td>
                               <td>{d.date}</td>
-                              <td>{d.remarks || "Weekly Thrift Contribution"}</td>
+                    <td>{d.remarks || (ml ? "ആഴ്ചതോറുമുള്ള സമ്പാദ്യ വിഹിതം" : "Weekly Thrift Contribution")}</td>
                               <td className="text-success fw-bolder fs-6">+₹{d.amount.toLocaleString()}</td>
                               <td>
                                 <span className="badge bg-light text-dark border">{d.paymentMode}</span>
                               </td>
-                              <td className="text-muted small">{d.collectedBy || "Secretary"}</td>
+                    <td className="text-muted small">{d.collectedBy || (ml ? "സെക്രട്ടറി" : "Secretary")}</td>
                             </tr>
                           ))
                       )}
@@ -606,8 +607,8 @@ const ThriftPassbook = () => {
             ) : (
               <div className="text-center py-5 text-muted">
                 <span className="fs-1 d-block mb-2">💳</span>
-                <p className="fw-semibold mb-1">Select a member profile above to load the digital passbook.</p>
-                <small>{isMember ? "Your secretary's recorded deposits will appear here." : "Choose a member to view recorded savings."}</small>
+            <p className="fw-semibold mb-1">{ml ? "ഡിജിറ്റൽ പാസ്ബുക്ക് കാണാൻ മുകളിലെ അംഗ പ്രൊഫൈൽ തിരഞ്ഞെടുക്കുക." : "Select a member profile above to load the digital passbook."}</p>
+            <small>{isMember ? (ml ? "സെക്രട്ടറി രേഖപ്പെടുത്തിയ നിങ്ങളുടെ നിക്ഷേപങ്ങൾ ഇവിടെ കാണാം." : "Your secretary's recorded deposits will appear here.") : (ml ? "രേഖപ്പെടുത്തിയ സമ്പാദ്യം കാണാൻ ഒരു അംഗത്തെ തിരഞ്ഞെടുക്കുക." : "Choose a member to view recorded savings.")}</small>
               </div>
             )}
           </div>
@@ -619,7 +620,7 @@ const ThriftPassbook = () => {
         <div className="custom-modal-backdrop">
           <div className="custom-modal-card">
             <div className="custom-modal-header bg-primary text-white">
-              <h5 className="custom-modal-title text-white">💳 {editingDeposit ? "Update Thrift Entry" : "Record Weekly Thrift Deposit"}</h5>
+            <h5 className="custom-modal-title text-white">💳 {editingDeposit ? (ml ? "സമ്പാദ്യ രേഖ പുതുക്കുക" : "Update Thrift Entry") : (ml ? "ആഴ്ചതോറുമുള്ള സമ്പാദ്യ നിക്ഷേപം രേഖപ്പെടുത്തുക" : "Record Weekly Thrift Deposit")}</h5>
               <button
                 type="button"
                 className="btn-close btn-close-white"
@@ -629,7 +630,7 @@ const ThriftPassbook = () => {
             <form onSubmit={handleDepositSubmit}>
               <div className="custom-modal-body">
                 <div className="form-group-item">
-                  <label className="form-group-label">Select NHG Member *</label>
+              <label className="form-group-label">{ml ? "അയൽക്കൂട്ട അംഗത്തെ തിരഞ്ഞെടുക്കുക *" : "Select NHG Member *"}</label>
                   {editingDeposit ? <div className="form-control-input bg-light" aria-readonly="true">
                     {editingDeposit.memberName} ({editingDeposit.memberId})
                   </div> : <select
@@ -638,10 +639,10 @@ const ThriftPassbook = () => {
                     onChange={(e) => setForm({ ...form, memberId: e.target.value })}
                     required
                   >
-                    <option value="">-- Choose Member --</option>
+                    <option value="">{ml ? "-- അംഗത്തെ തിരഞ്ഞെടുക്കുക --" : "-- Choose Member --"}</option>
                     {members.map((m) => (
                       <option key={m._id} value={m.memberId}>
-                        {m.name} ({m.memberId}) - Ward {m.ward}
+                        {m.name} ({m.memberId}) - {ml ? "വാർഡ്" : "Ward"} {m.ward}
                       </option>
                     ))}
                   </select>}
@@ -649,11 +650,11 @@ const ThriftPassbook = () => {
 
                 <div className="row">
                   <div className="col-6 form-group-item">
-                    <label className="form-group-label">Amount (₹) *</label>
+              <label className="form-group-label">{ml ? "തുക (₹) *" : "Amount (₹) *"}</label>
                     <input
                       type="number"
                       className="form-control-input"
-                      placeholder="e.g. 50 or 100"
+                placeholder={ml ? "ഉദാ. 50 അല്ലെങ്കിൽ 100" : "e.g. 50 or 100"}
                       value={form.amount}
                       onChange={(e) => setForm({ ...form, amount: e.target.value })}
                       required
@@ -661,7 +662,7 @@ const ThriftPassbook = () => {
                     />
                   </div>
                   <div className="col-6 form-group-item">
-                    <label className="form-group-label">Date *</label>
+              <label className="form-group-label">{ml ? "തീയതി *" : "Date *"}</label>
                     <input
                       type="date"
                       className="form-control-input"
@@ -673,24 +674,24 @@ const ThriftPassbook = () => {
                 </div>
 
                 <div className="form-group-item">
-                  <label className="form-group-label">Payment Mode</label>
+              <label className="form-group-label">{ml ? "പണമടച്ച രീതി" : "Payment Mode"}</label>
                   <select
                     className="form-control-input"
                     value={form.paymentMode}
                     onChange={(e) => setForm({ ...form, paymentMode: e.target.value })}
                   >
-                    <option value="Cash">Cash (Collected at Meeting)</option>
-                    <option value="UPI">UPI / Digital</option>
-                    <option value="Bank">Direct Bank Transfer</option>
+                <option value="Cash">{ml ? "പണം (യോഗത്തിൽ ശേഖരിച്ചത്)" : "Cash (Collected at Meeting)"}</option>
+                <option value="UPI">{ml ? "യുപിഐ / ഡിജിറ്റൽ" : "UPI / Digital"}</option>
+                <option value="Bank">{ml ? "നേരിട്ടുള്ള ബാങ്ക് കൈമാറ്റം" : "Direct Bank Transfer"}</option>
                   </select>
                 </div>
 
                 <div className="form-group-item">
-                  <label className="form-group-label">Remarks</label>
+              <label className="form-group-label">{t("remarks")}</label>
                   <input
                     type="text"
                     className="form-control-input"
-                    placeholder="e.g. Weekly Savings (Optional)"
+                placeholder={ml ? "ഉദാ. ആഴ്ചതോറുമുള്ള സമ്പാദ്യം (ഐച്ഛികം)" : "e.g. Weekly Savings (Optional)"}
                     value={form.remarks}
                     onChange={(e) => setForm({ ...form, remarks: e.target.value })}
                   />
@@ -702,10 +703,10 @@ const ThriftPassbook = () => {
                   className="btn btn-secondary"
                   onClick={() => { setShowDepositModal(false); setEditingDeposit(null); }}
                 >
-                  Cancel
+                  {ml ? "റദ്ദാക്കുക" : "Cancel"}
                 </button>
                 <button type="submit" className="btn btn-success fw-bold px-3">
-                  ✓ {editingDeposit ? "Save Changes" : "Record & Generate Receipt"}
+                ✓ {editingDeposit ? t("save") : (ml ? "രേഖപ്പെടുത്തി രസീത് സൃഷ്ടിക്കുക" : "Record & Generate Receipt")}
                 </button>
               </div>
             </form>

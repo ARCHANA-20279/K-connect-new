@@ -7,9 +7,20 @@ const {
   approveMember,
   rejectMember,
 } = require("../controllers/memberController");
+const {
+  getOwnMemberProfile,
+  submitOwnProfileUpdate,
+  getNHGProfileUpdateRequests,
+  reviewProfileUpdateRequest,
+} = require("../controllers/memberProfileController");
 const { protect, optionalProtect, authorize } = require("../middleware/auth");
 
 const router = express.Router();
+
+router.get("/me/profile", protect, authorize("member"), getOwnMemberProfile);
+router.post("/me/profile-updates", protect, authorize("member"), submitOwnProfileUpdate);
+router.get("/profile-updates", protect, authorize("secretary"), getNHGProfileUpdateRequests);
+router.patch("/profile-updates/:requestId", protect, authorize("secretary"), reviewProfileUpdateRequest);
 
 // Only Secretary can register, update, or deactivate members
 router.post("/", protect, authorize("secretary"), createMember);

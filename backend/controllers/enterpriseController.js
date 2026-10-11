@@ -1,4 +1,7 @@
 const EnterpriseListing = require("../models/EnterpriseListing");
+const Notification = require("../models/Notification");
+const User = require("../models/User");
+const Member = require("../models/Member");
 
 const isAdmin = (user) => ["main_admin", "super_admin", "superadmin"].includes((user?.role || "").toLowerCase());
 const sameNhg = (listing, user) => (user?.nhgId && listing.nhgId === user.nhgId) || (user?.nhgName && listing.nhgName === user.nhgName);
@@ -38,6 +41,54 @@ const createListing = async (req, res) => {
   }
 };
 
+const createBazaarInquiry = async (req, res) => {
+  try {
+    const productName = String(req.body.productName || "").trim();
+    const price = Number(req.body.price);
+    if (!productName || productName.length > 120 || !Number.isFinite(price) || price < 0 || price > 10000000) {
+      return res.status(400).json({ message: "Choose a valid product before contacting its NHG." });
+    }
+    const user = req.user;
+    if (!user.nhgId && !user.nhgName) {
+      return res.status(400).json({ message: "Your account is not linked to an NHG, so we cannot route this inquiry." });
+    }
+    const nhgFilter = user.nhgId
+      ? { nhgId: user.nhgId }
+      : { nhgName: user.nhgName };
+    const secretary = await User.findOne({
+      role: { $in: ["NHG_SECRETARY", "nhg_secretary", "secretary"] },
+      ...nhgFilter,
+    }).select("_id");
+    if (!secretary) {
+      return res.status(404).json({ message: "No Secretary account is assigned to your NHG yet. Please contact your NHG Secretary directly." });
+    }
+
+    const memberRecord = user.memberId
+      ? await Member.findOne({ memberId: user.memberId }).select("phone")
+      : null;
+    const contact = user.phone || memberRecord?.phone || user.email || "the member's K-Connect account";
+    const nhgName = user.nhgName || "your NHG";
+    await Notification.create({
+      type: "BAZAAR_INQUIRY",
+      title: `K-Bazaar inquiry: ${productName}`,
+      message: `${user.name || "A member"} (${user.memberId || "member"}) from ${nhgName} is interested in ${productName} (₹${price.toLocaleString("en-IN")}). Please contact them at ${contact}.`,
+      recipientRole: "secretary",
+      targetAudience: `NHG Secretary — ${nhgName}`,
+      issuingAuthority: "K-Bazaar",
+      category: "Product inquiry",
+      createdBy: user.name || "K-Connect member",
+      nhgId: user.nhgId || undefined,
+      nhgName: user.nhgName || undefined,
+    });
+    return res.status(201).json({
+      message: `Your interest was sent to the ${nhgName} Secretary. They will contact you using the phone or email on your member account.`,
+    });
+  } catch (error) {
+    console.error("K-Bazaar inquiry error:", error);
+    return res.status(500).json({ message: "Could not send your inquiry to the NHG Secretary. Please try again." });
+  }
+};
+
 const updateListing = async (req, res) => {
   try {
     const listing = await EnterpriseListing.findById(req.params.id);
@@ -65,4 +116,4 @@ const deleteListing = async (req, res) => {
   }
 };
 
-module.exports = { getListings, createListing, updateListing, deleteListing };
+module.exports = { getListings, createListing, createBazaarInquiry, updateListing, deleteListing };

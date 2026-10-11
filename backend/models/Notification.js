@@ -14,7 +14,7 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["MEETING", "ATTENDANCE", "ANNOUNCEMENT", "LOAN", "CIRCULAR", "AUDIT", "JOB"],
+      enum: ["MEETING", "ATTENDANCE", "ANNOUNCEMENT", "LOAN", "CIRCULAR", "AUDIT", "JOB", "BAZAAR_INQUIRY", "MEMBER_PROFILE_UPDATE"],
       default: "CIRCULAR",
     },
     recipientRole: {
@@ -56,6 +56,10 @@ const notificationSchema = new mongoose.Schema(
     relatedJob: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "JobAllocation",
+    },
+    relatedProfileRequest: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MemberProfileUpdateRequest",
     },
     recipientMemberId: {
       type: String,

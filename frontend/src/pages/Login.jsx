@@ -10,6 +10,8 @@ import "../Login.css";
 const FormIcon = ({ name }) => {
   const common = { width: 19, height: 19, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
   if (name === "key") return <svg {...common}><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8 2 2-2 2 2 2-3 3-2-2-2 2"/></svg>;
+  if (name === "eye") return <svg {...common}><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>;
+  if (name === "eyeOff") return <svg {...common}><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.1 3.8M6.2 6.2C3.5 8.1 2 12 2 12s3.6 7 10 7a10 10 0 0 0 4-.8"/></svg>;
   if (name === "info") return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>;
   if (name === "code") return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m8 10-2 2 2 2m8-4 2 2-2 2m-3-5-2 6"/></svg>;
   return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>;
@@ -23,6 +25,7 @@ const Login = ({ accountType = "" }) => {
 
   // Existing authentication state (Preserved exactly)
   const [form, setForm] = useState({ email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -90,8 +93,8 @@ const Login = ({ accountType = "" }) => {
       const emailIsNotConfigured = responseMessage.toLowerCase().includes("email is not configured");
       setForgotMessage(emailIsNotConfigured
         ? (isMl
-          ? "ഈ പ്രോജക്റ്റിൽ ഇമെയിൽ അയയ്ക്കൽ ഇതുവരെ സജ്ജമാക്കിയിട്ടില്ല. അഡ്മിൻ backend/.env-ൽ RESEND_API_KEY, EMAIL_FROM എന്നിവ ചേർത്ത് ബാക്കെൻഡ് വീണ്ടും ആരംഭിക്കണം. കോഡ് അയച്ചിട്ടില്ല."
-          : "Email sending is not set up for this project yet. The admin must add RESEND_API_KEY and EMAIL_FROM to backend/.env, then restart the backend. No code was sent.")
+          ? "ഈ പ്രോജക്റ്റിൽ ഇമെയിൽ അയയ്ക്കൽ സജ്ജമാക്കിയിട്ടില്ല. അഡ്മിൻ backend/.env-ൽ GMAIL_USER, GMAIL_APP_PASSWORD എന്നിവ ചേർത്ത് ബാക്കെൻഡ് വീണ്ടും ആരംഭിക്കണം. കോഡ് അയച്ചിട്ടില്ല."
+          : "Email sending is not configured yet. Add GMAIL_USER and GMAIL_APP_PASSWORD to backend/.env, then restart the backend. No code was sent.")
         : responseMessage || (isMl
           ? "പാസ്‌വേഡ് മാറ്റാൻ നിങ്ങളുടെ NHG സെക്രട്ടറിയെ സമീപിക്കുക."
           : "Please contact your NHG Secretary to reset credentials."));
@@ -218,11 +221,11 @@ const Login = ({ accountType = "" }) => {
                   {isMl ? "പാസ്‌വേഡ് മറന്നോ?" : "Forgot Password?"}
                 </button>
               </div>
-              <div className="kc-field-wrapper">
+              <div className="kc-field-wrapper kc-password-field">
                 <span className="kc-field-icon">🔐</span>
                 <input
                   id="kc-password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   name="password"
                   className="kc-field-input"
                   placeholder="••••••••"
@@ -231,6 +234,15 @@ const Login = ({ accountType = "" }) => {
                   autoComplete="current-password"
                   required
                 />
+                <button
+                  type="button"
+                  className="kc-password-toggle"
+                  aria-label={showPassword ? (isMl ? "പാസ്‌വേഡ് മറയ്ക്കുക" : "Hide password") : (isMl ? "പാസ്‌വേഡ് കാണിക്കുക" : "Show password")}
+                  aria-pressed={showPassword}
+                  onClick={() => setShowPassword((visible) => !visible)}
+                >
+                  <FormIcon name={showPassword ? "eyeOff" : "eye"} />
+                </button>
               </div>
             </div>
 
@@ -393,7 +405,7 @@ const Login = ({ accountType = "" }) => {
                   <button
                     type="submit"
                     className="kc-btn-primary"
-                    disabled={forgotLoading || forgotMessage.toLowerCase().includes("not set up") || forgotMessage.includes("സജ്ജമാക്കിയിട്ടില്ല")}
+                    disabled={forgotLoading || forgotMessage.toLowerCase().includes("not set up") || forgotMessage.toLowerCase().includes("not configured") || forgotMessage.toLowerCase().includes("example address") || forgotMessage.includes("സജ്ജമാക്കിയിട്ടില്ല")}
                   >
                     {forgotLoading ? (
                       t("loading")

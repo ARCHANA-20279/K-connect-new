@@ -47,7 +47,14 @@ const getNotifications = async (req, res) => {
           ...(filter.$and || []),
           audienceFilter,
           ...(role === "bankofficer" ? [] : [{ $or: scope }]),
-          ...(role === "member" ? [{ $or: [{ type: { $ne: "JOB" } }, { recipientMemberId: user.memberId || "" }] }] : []),
+          ...(role === "member" ? [
+            { $or: [{ type: { $ne: "JOB" } }, { recipientMemberId: user.memberId || "" }] },
+            { $or: [
+              { recipientMemberId: { $exists: false } },
+              { recipientMemberId: "" },
+              { recipientMemberId: user.memberId || "" },
+            ] },
+          ] : []),
         ];
       }
     }

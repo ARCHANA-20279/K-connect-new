@@ -29,7 +29,6 @@ const TopGovBar = () => {
       <div className="container-fluid px-3 px-lg-4 d-flex justify-content-between align-items-center flex-wrap">
         {/* LEFT: GOVT OF KERALA & KUDUMBASHREE TAG */}
         <div className="d-flex align-items-center gap-2 py-1">
-          <span className="gov-emblem-badge">🏛️</span>
           <span className="gov-text-primary">
             {isMl
               ? "കേരള സർക്കാർ • തദ്ദേശ സ്വയംഭരണ വകുപ്പ് (LSGD)"
@@ -46,11 +45,9 @@ const TopGovBar = () => {
         {/* RIGHT: TIME, HELPLINE & QUICK TAG */}
         <div className="d-flex align-items-center gap-3 py-1 small">
           <div className="d-none d-lg-flex align-items-center gap-1 text-white-50">
-            <span>🕒</span>
             <span>{timeStr}</span>
           </div>
           <div className="d-flex align-items-center gap-1 gov-helpline">
-            <span>📞</span>
             <span>
               {isMl ? "സി.ഡി.എസ് ഹെൽപ്പ്‌ലൈൻ: " : "CDS Helpline: "}
               <strong>1800-425-4567</strong>
